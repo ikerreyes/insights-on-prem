@@ -1,0 +1,30 @@
+name: Unit Tests (monolithic)
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install fastapi uvicorn python-multipart sqlalchemy psycopg2-binary alembic \
+                      insights-core httpx pydantic pyyaml pytest pytest-cov pytest-asyncio
+
+      - name: Run unit tests
+        working-directory: monolithic
+        run: pytest tests/ -v --tb=short
