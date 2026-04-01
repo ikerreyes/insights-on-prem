@@ -12,7 +12,7 @@ from app.services.thanos_service import ThanosService
 def config():
     return AppConfig(
         thanos_url="https://thanos.test:8443",
-        thanos_query_timeout=5,
+        thanos_query_timeout_seconds=5,
         thanos_query_lookback_minutes=60,
     )
 

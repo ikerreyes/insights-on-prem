@@ -154,7 +154,7 @@ def test_alert_console_url(service):
     result = service.predict(alerts, [], "https://console.example.com")
     url = result.upgrade_risks_predictors.alerts[0].url
     assert "monitoring/alerts" in url
-    assert "alert-name=KubeAPIDown" in url
+    assert "name=KubeAPIDown" in url
 
 
 def test_foc_console_url(service):

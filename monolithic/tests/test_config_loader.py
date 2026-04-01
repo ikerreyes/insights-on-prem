@@ -16,7 +16,7 @@ def test_load_config_success(tmp_path):
             "postgres_host": "dbhost",
             "postgres_port": 5433,
             "max_file_size": 50000,
-            "extract_timeout": 600,
+            "extract_timeout_seconds": 600,
             "temp_upload_dir": "/tmp/custom",
         },
         "plugins": {
@@ -35,7 +35,7 @@ def test_load_config_success(tmp_path):
     assert config.postgres_port == 5433
     assert config.max_file_size == 50000
     assert config.plugin_packages == ["package1", "package2"]
-    assert config.extract_timeout == 600
+    assert config.extract_timeout_seconds == 600
     assert config.temp_upload_dir == "/tmp/custom"
 
 
@@ -85,7 +85,7 @@ def test_load_config_empty_file(tmp_path):
 
     assert isinstance(config, AppConfig)
     assert config.postgres_host == "localhost"
-    assert config.extract_timeout == 300
+    assert config.extract_timeout_seconds == 300
 
 
 @patch('app.config_loader.apply_configs')

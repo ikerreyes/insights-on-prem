@@ -14,7 +14,7 @@ from app.exceptions import ProcessingError
 def service_config(tmp_path):
     """Default processor service config using tmp_path."""
     return AppConfig(
-        extract_timeout=300,
+        extract_timeout_seconds=300,
         temp_upload_dir=str(tmp_path),
         format="insights.formats._json.JsonFormat",
         target_components=[],
@@ -32,7 +32,7 @@ def test_init_with_valid_config(service_config, tmp_path):
     """Test initialization with valid config."""
     service = ProcessorService(service_config)
 
-    assert service.extract_timeout == 300
+    assert service.extract_timeout_seconds == 300
     assert service.extract_tmp_dir == str(tmp_path)  # sourced from config.temp_upload_dir
     assert service.unpacked_archive_size_limit == -1
 
