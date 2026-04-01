@@ -144,3 +144,40 @@ class ReportResponseV2(BaseModel):
 
     report: ReportV2 = Field(..., description="Report data")
     status: str = Field(default="ok", description="Response status")
+
+
+# Schemas for on-demand data gathering request status/report endpoints
+
+class RequestStatusResponse(BaseModel):
+    """Response schema for request processing status endpoint.
+
+    Matches insights-results-smart-proxy format.
+    Row presence = processed; if not found, endpoint returns 404.
+    """
+
+    cluster: str = Field(..., description="Cluster UUID")
+    requestID: str = Field(..., description="Request identifier")
+    status: str = Field(default="processed", description="Processing status")
+
+
+class SimplifiedRuleHit(BaseModel):
+    """A single rule hit in a simplified report."""
+
+    rule_fqdn: str = Field(..., description="Fully qualified rule name")
+    error_key: str = Field(..., description="Error key for the rule")
+    description: str = Field(default="", description="Rule description")
+    total_risk: int = Field(default=0, description="Total risk level (1-4)")
+
+
+class RequestReportResponse(BaseModel):
+    """Response schema for request report endpoint.
+
+    Matches insights-results-smart-proxy format.
+    """
+
+    cluster: str = Field(..., description="Cluster UUID")
+    requestID: str = Field(..., description="Request identifier")
+    status: str = Field(default="processed", description="Processing status")
+    report: List[SimplifiedRuleHit] = Field(
+        default_factory=list, description="List of rule hits"
+    )

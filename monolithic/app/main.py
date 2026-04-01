@@ -24,12 +24,16 @@ from app.config_loader import load_config, load_insights_components
 from app.content_parser_yaml import YAMLContentParser
 from app.database import get_db, init_db
 from app.exceptions import ValidationError
+from app.models import RequestReport
 from app.schemas import (
     BatchUpgradeRisksPredictionRequest,
     BatchUpgradeRisksPredictionResponse,
     ClusterPrediction,
     ErrorResponse,
     ReportResponseV2,
+    RequestStatusResponse,
+    RequestReportResponse,
+    SimplifiedRuleHit,
     UploadResponse,
 )
 from app.services.content_service import ContentService
@@ -69,7 +73,39 @@ async def lifespan(app: FastAPI):
     app.state.upgrade_prediction_service = UpgradePredictionService()
     logger.info("All services initialized successfully")
 
+    # Start periodic cleanup of old request reports
+    cleanup_task = asyncio.create_task(
+        _cleanup_old_request_reports(session_factory, config)
+    )
+
     yield
+
+    # Cancel cleanup task on shutdown
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+
+
+async def _cleanup_old_request_reports(session_factory, config):
+    """Periodically delete old request report records."""
+    while True:
+        await asyncio.sleep(config.request_report_cleanup_interval_minutes * 60)
+        db = session_factory()
+        try:
+            cutoff = datetime.utcnow() - timedelta(
+                hours=config.request_report_retention_hours
+            )
+            deleted = RequestReport.delete_older_than(db, cutoff)
+            db.commit()
+            if deleted:
+                logger.info(f"Cleaned up {deleted} old request reports")
+        except Exception as e:
+            logger.error(f"Request report cleanup failed: {e}")
+            db.rollback()
+        finally:
+            db.close()
 
 
 # Create FastAPI app
@@ -259,6 +295,87 @@ async def upgrade_risks_prediction_batch(
 
     predictions = await asyncio.gather(*[predict_for_cluster(c) for c in clusters])
     return BatchUpgradeRisksPredictionResponse(predictions=list(predictions))
+
+
+@app.get(
+    "/api/v2/cluster/{cluster_id}/request/{request_id}/status",
+    response_model=RequestStatusResponse,
+    status_code=200,
+    responses={
+        404: {"model": ErrorResponse, "description": "Request ID not found"},
+    },
+)
+async def get_request_status(
+    cluster_id: str,
+    request_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Check the processing status of an on-demand data gathering request.
+
+    Returns 404 if the request has not been processed yet (operator retries).
+    """
+    record = RequestReport.get_by_cluster_and_request(db, cluster_id, request_id)
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail="Request ID not found for given cluster_id",
+        )
+
+    return RequestStatusResponse(
+        cluster=cluster_id,
+        requestID=request_id,
+        status="processed",
+    )
+
+
+@app.get(
+    "/api/v2/cluster/{cluster_id}/request/{request_id}/report",
+    response_model=RequestReportResponse,
+    status_code=200,
+    responses={
+        404: {"model": ErrorResponse, "description": "Request ID not found"},
+    },
+)
+async def get_request_report(
+    cluster_id: str,
+    request_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieve the simplified report for an on-demand data gathering request.
+
+    Returns 404 if the request has not been processed yet.
+    """
+    import json
+
+    record = RequestReport.get_by_cluster_and_request(db, cluster_id, request_id)
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail="Request ID not found for given cluster_id",
+        )
+
+    try:
+        rule_hits_raw = json.loads(record.report)
+        rule_hits = [
+            SimplifiedRuleHit(
+                rule_fqdn=hit.get("rule_fqdn", ""),
+                error_key=hit.get("error_key", ""),
+                description=hit.get("description", ""),
+                total_risk=hit.get("total_risk", 0),
+            )
+            for hit in rule_hits_raw
+        ]
+    except (json.JSONDecodeError, TypeError):
+        rule_hits = []
+
+    return RequestReportResponse(
+        cluster=cluster_id,
+        requestID=request_id,
+        status="processed",
+        report=rule_hits,
+    )
 
 
 @app.exception_handler(HTTPException)

@@ -24,6 +24,9 @@ class AppConfig:
     target_components: list[str] = field(default_factory=list)
     unpacked_archive_size_limit: int = -1
 
+    request_report_retention_hours: int = 24
+    request_report_cleanup_interval_minutes: int = 60
+
     thanos_url: str = "https://rbac-query-proxy.open-cluster-management-observability.svc.cluster.local:8443"
     thanos_token_path: str = "/var/run/secrets/kubernetes.io/serviceaccount/token"
     thanos_sa_cert_path: str = (
@@ -58,6 +61,8 @@ _ENV_OVERRIDES = {
     "THANOS_SA_CERT_PATH": ("thanos_sa_cert_path", str),
     "THANOS_QUERY_TIMEOUT_SECONDS": ("thanos_query_timeout_seconds", int),
     "THANOS_QUERY_LOOKBACK_MINUTES": ("thanos_query_lookback_minutes", int),
+    "REQUEST_REPORT_RETENTION_HOURS": ("request_report_retention_hours", int),
+    "REQUEST_REPORT_CLEANUP_INTERVAL_MINUTES": ("request_report_cleanup_interval_minutes", int),
 }
 
 

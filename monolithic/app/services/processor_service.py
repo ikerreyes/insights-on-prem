@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.config import AppConfig
 from app.exceptions import ProcessingError
-from app.models import Report, RuleHit
+from app.models import Report, RequestReport, RuleHit
 
 logger = logging.getLogger(__name__)
 
@@ -214,13 +214,16 @@ class ProcessorService:
 
         return rule_hits
 
-    def save_results(self, db: Session, cluster_id: str, results_json: str) -> int:
+    def save_results(
+        self, db: Session, cluster_id: str, results_json: str, request_id: str = None,
+    ) -> int:
         """
         Save processing results to database.
 
         :param db: Database session
         :param cluster_id: Cluster identifier
         :param results_json: JSON results from insights-core
+        :param request_id: Optional request ID for on-demand gathering
         :return: Number of rule hits saved
         """
         # Extract rule hits from results
@@ -259,6 +262,16 @@ class ProcessorService:
                 if (existing.rule_fqdn, existing.error_key) not in new_keys:
                     db.delete(existing)
 
+            # Save simplified report for on-demand request tracking
+            if request_id:
+                simplified_report = json.dumps(rule_hits)
+                RequestReport.create(
+                    db,
+                    request_id=request_id,
+                    cluster_id=cluster_id,
+                    report=simplified_report,
+                )
+
             # Commit the transaction
             db.commit()
 
@@ -273,12 +286,19 @@ class ProcessorService:
             )
             raise ProcessingError(f"Database save failed: {str(e)}") from e
 
+<<<<<<< HEAD
     def process_archive(self, db: Session, archive_path: str) -> tuple[str, int]:
+=======
+    def process_archive(
+        self, db: Session, archive_path: str, request_id: str = None,
+    ) -> Tuple[str, int]:
+>>>>>>> c51e9ad (Add on demand data gathering endpoints)
         """
         Main processing function - extract, analyze, and save archive.
 
         :param db: Database session
         :param archive_path: Path to uploaded archive file
+        :param request_id: Optional request ID for on-demand gathering
         :return: Tuple of (cluster_id, number of rules found)
         :raises ProcessingError: If processing fails at any stage
         """
@@ -288,7 +308,7 @@ class ProcessorService:
         cluster_id, results_json = self.process_with_insights_core(archive_path)
 
         # Save to database
-        rules_count = self.save_results(db, cluster_id, results_json)
+        rules_count = self.save_results(db, cluster_id, results_json, request_id)
 
         logger.info(f"Completed processing for cluster {cluster_id}")
         return cluster_id, rules_count
