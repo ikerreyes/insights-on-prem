@@ -64,6 +64,29 @@ class UpgradeRisksPredictionResponse(BaseModel):
     status: str = Field(default="ok", description="Response status")
 
 
+# Schemas for batch upgrade risks prediction endpoint (matching ccx-upgrades-data-eng API)
+class BatchUpgradeRisksPredictionRequest(BaseModel):
+    """Request body matching console.redhat.com batch URP API."""
+
+    clusters: List[str] = Field(..., description="List of cluster UUIDs")
+
+
+class ClusterPrediction(BaseModel):
+    """Single cluster prediction result matching ccx-upgrades-data-eng ClusterPrediction."""
+
+    cluster_id: str
+    prediction_status: str
+    upgrade_recommended: Optional[bool] = None
+    upgrade_risks_predictors: Optional[UpgradeRisksPredictors] = None
+    last_checked_at: Optional[str] = None
+
+
+class BatchUpgradeRisksPredictionResponse(BaseModel):
+    """Response matching ccx-upgrades-data-eng MultiClusterUpgradeApiResponse."""
+
+    predictions: List[ClusterPrediction]
+
+
 # Schemas for v2 cluster report endpoint
 class ReportMetaV2(BaseModel):
     """Metadata for v2 cluster report."""

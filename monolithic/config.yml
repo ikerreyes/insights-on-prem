@@ -20,7 +20,7 @@ service:
 
   # Thanos configuration
   thanos_url: https://rbac-query-proxy.open-cluster-management-observability.svc.cluster.local:8443
-  thanos_query_timeout: 10
+  thanos_query_timeout_seconds: 10
   thanos_query_lookback_minutes: 60
 
 plugins:
