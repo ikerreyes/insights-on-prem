@@ -20,13 +20,6 @@ class ErrorResponse(BaseModel):
     detail: Optional[str] = Field(None, description="Additional error details")
 
 
-# Schemas for upgrade risks prediction endpoint
-class UpgradeRisksPredictionRequest(BaseModel):
-    """Request body for upgrade risks prediction."""
-
-    cluster_id: str = Field(..., description="Cluster UUID")
-
-
 class AlertResponse(BaseModel):
     """Alert information from Thanos metrics."""
 
@@ -54,14 +47,28 @@ class UpgradeRisksPredictors(BaseModel):
     )
 
 
-class UpgradeRisksPredictionResponse(BaseModel):
-    """Response for upgrade risks prediction endpoint."""
 
-    upgrade_recommended: bool = Field(..., description="Whether upgrade is recommended")
-    upgrade_risks_predictors: UpgradeRisksPredictors = Field(
-        ..., description="Detected upgrade risk predictors"
-    )
-    status: str = Field(default="ok", description="Response status")
+# Schemas for batch upgrade risks prediction endpoint (matching ccx-upgrades-data-eng API)
+class BatchUpgradeRisksPredictionRequest(BaseModel):
+    """Request body matching console.redhat.com batch URP API."""
+
+    clusters: List[str] = Field(..., description="List of cluster UUIDs")
+
+
+class ClusterPrediction(BaseModel):
+    """Single cluster prediction result matching ccx-upgrades-data-eng ClusterPrediction."""
+
+    cluster_id: str
+    prediction_status: str
+    upgrade_recommended: Optional[bool] = None
+    upgrade_risks_predictors: Optional[UpgradeRisksPredictors] = None
+    last_checked_at: Optional[str] = None
+
+
+class BatchUpgradeRisksPredictionResponse(BaseModel):
+    """Response matching ccx-upgrades-data-eng MultiClusterUpgradeApiResponse."""
+
+    predictions: List[ClusterPrediction]
 
 
 # Schemas for v2 cluster report endpoint

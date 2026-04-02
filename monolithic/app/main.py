@@ -1,7 +1,9 @@
 """FastAPI application for Insights On Premise."""
+import asyncio
 import logging
 import os
 import uuid
+from datetime import datetime, timezone
 
 from contextlib import asynccontextmanager
 from fastapi import BackgroundTasks, FastAPI, File, Request, UploadFile, Depends, HTTPException, Header
@@ -14,8 +16,9 @@ from app.schemas import (
     UploadResponse,
     ErrorResponse,
     ReportResponseV2,
-    UpgradeRisksPredictionRequest,
-    UpgradeRisksPredictionResponse,
+    BatchUpgradeRisksPredictionRequest,
+    BatchUpgradeRisksPredictionResponse,
+    ClusterPrediction,
 )
 from app.content_parser_yaml import YAMLContentParser
 from app.services.report_service import ReportService
@@ -183,42 +186,58 @@ async def get_cluster_report_v2(
 
 
 @app.post(
-    "/upgrade-risks-prediction",
-    response_model=UpgradeRisksPredictionResponse,
+    "/api/insights-results-aggregator/v2/upgrade-risks-prediction",
+    response_model=BatchUpgradeRisksPredictionResponse,
     status_code=200,
-    responses={
-        500: {"model": ErrorResponse, "description": "Internal Server Error"},
-    },
 )
-async def upgrade_risks_prediction(
+async def upgrade_risks_prediction_batch(
     request: Request,
-    body: UpgradeRisksPredictionRequest,
+    body: BatchUpgradeRisksPredictionRequest,
 ):
     """
-    Predict upgrade risks for a cluster based on current alerts and operator conditions.
+    Batch upgrade risks prediction matching the ccx-upgrades-data-eng API.
 
-    Queries Thanos for active alerts and failing operator conditions,
-    then applies static filtering rules to identify actual upgrade risks.
+    Accepts { clusters: [...] } and returns { predictions: [...] }, matching
+    the MultiClusterUpgradeApiResponse format that the ACM console expects.
+    This allows redirecting the console's console.redhat.com URP call to this
+    service via a simple URL swap — no function patching required.
 
-    :param body: Request body containing cluster_id
-    :return: UpgradeRisksPredictionResponse with recommendation and risks
+    :param body: Request body containing list of cluster UUIDs
+    :return: BatchUpgradeRisksPredictionResponse
     """
     thanos_service: ThanosService = request.app.state.thanos_service
     prediction_service: UpgradePredictionService = request.app.state.upgrade_prediction_service
 
-    try:
-        console_url, alerts, focs = thanos_service.query_cluster_metrics(body.cluster_id)
-        return prediction_service.predict(alerts, focs, console_url)
-
-    except Exception as e:
-        logger.error(
-            f"Error predicting upgrade risks for cluster {body.cluster_id}: {e}",
-            exc_info=True,
-        )
+    MAX_BATCH_SIZE = 100
+    if len(body.clusters) > MAX_BATCH_SIZE:
         raise HTTPException(
-            status_code=500,
-            detail="Internal server error while predicting upgrade risks",
+            status_code=400,
+            detail=f"Batch size {len(body.clusters)} exceeds maximum of {MAX_BATCH_SIZE} clusters per request.",
         )
+    clusters = body.clusters
+
+    async def predict_for_cluster(cluster_id: str) -> ClusterPrediction:
+        try:
+            console_url, alerts, focs = await asyncio.to_thread(
+                thanos_service.query_cluster_metrics, cluster_id
+            )
+            result = prediction_service.predict(alerts, focs, console_url)
+            return ClusterPrediction(
+                cluster_id=cluster_id,
+                prediction_status="ok",
+                upgrade_recommended=result.upgrade_recommended,
+                upgrade_risks_predictors=result.upgrade_risks_predictors,
+                last_checked_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+        except Exception:
+            logger.exception("Error predicting upgrade risks for cluster %s", cluster_id)
+            return ClusterPrediction(
+                cluster_id=cluster_id,
+                prediction_status="No data for the cluster",
+            )
+
+    predictions = await asyncio.gather(*[predict_for_cluster(c) for c in clusters])
+    return BatchUpgradeRisksPredictionResponse(predictions=list(predictions))
 
 
 @app.exception_handler(HTTPException)
