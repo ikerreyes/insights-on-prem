@@ -21,6 +21,12 @@ GET /api/v2/cluster/{cluster_id}/reports
 ```
 Retrieve processed report for a cluster.
 
+### Batch Upgrade Risk Predictions
+```
+POST /api/insights-results-aggregator/v2/upgrade-risks-prediction
+```
+Returns upgrade risk predictions for a list of clusters by querying Thanos for active alerts and failing operator conditions. Matches the `ccx-upgrades-data-eng` API format so the ACM console can route URP calls to this service instead of `console.redhat.com`.
+
 ### Health Check
 ```
 GET /health
@@ -43,10 +49,6 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   -t quay.io/ccxdev/insights-on-premise-poc:latest \
   --push .
 ```
-
-The image is referenced as `quay.io/ccxdev/insights-on-premise-poc:latest` in `deploy/insights.yml`. This image includes:
-- The core on-prem pipeline (archive processing, recommendations, URP via Thanos)
-- A batch URP endpoint at `/api/insights-results-aggregator/v2/upgrade-risks-prediction` matching the `ccx-upgrades-data-eng` API format, which allows the ACM console to route URP calls to this service instead of `console.redhat.com` (see [Update risk predictions](#update-risk-predictions) section)
 
 ## Running Locally with Docker Compose
 
