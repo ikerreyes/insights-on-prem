@@ -22,8 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install fastapi uvicorn python-multipart sqlalchemy psycopg2-binary alembic \
-                      insights-core httpx pydantic pyyaml pytest pytest-cov pytest-asyncio
+          pip install -r monolithic/requirements-test.txt
 
       - name: Run unit tests
         working-directory: monolithic
