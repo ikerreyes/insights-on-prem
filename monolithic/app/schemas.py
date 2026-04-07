@@ -46,6 +46,15 @@ class UpgradeRisksPredictors(BaseModel):
         default_factory=list, description="Failing operator conditions"
     )
 
+# Internal return type of UpgradePredictionService.predict().
+class UpgradeRisksPredictionResponse(BaseModel):
+    """Internal response from the upgrade prediction service."""
+
+    upgrade_recommended: bool = Field(..., description="Whether upgrade is recommended")
+    upgrade_risks_predictors: UpgradeRisksPredictors = Field(
+        ..., description="Detected upgrade risk predictors"
+    )
+    status: str = Field(default="ok", description="Response status")
 
 
 # Schemas for batch upgrade risks prediction endpoint (matching ccx-upgrades-data-eng API)
