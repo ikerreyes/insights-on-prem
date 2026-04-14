@@ -145,6 +145,7 @@ async def health_check():
 )
 async def upload_archive(
     request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),  # noqa: B008
     x_rh_insights_request_id: str = Header(None, alias="x-rh-insights-request-id"),  # noqa: B008
@@ -164,7 +165,9 @@ async def upload_archive(
     request_id = x_rh_insights_request_id or str(uuid.uuid4())
 
     try:
-        return await upload_service.process_upload(background_tasks, file, request_id)
+        upload_response = await upload_service.process_upload(background_tasks, file, request_id)
+        response.headers["x-rh-insights-request-id"] = request_id
+        return upload_response
 
     except ValidationError as e:
         raise HTTPException(

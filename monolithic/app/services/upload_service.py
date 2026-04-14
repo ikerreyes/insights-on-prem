@@ -4,7 +4,6 @@ import contextlib
 import logging
 import os
 import tempfile
-from datetime import datetime
 
 from fastapi import BackgroundTasks, UploadFile
 from sqlalchemy.orm import sessionmaker
@@ -174,5 +173,4 @@ class UploadService:
         return UploadResponse(
             request_id=request_id,
             status="accepted",
-            uploaded_at=datetime.utcnow(),
         )
