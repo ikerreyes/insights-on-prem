@@ -1,11 +1,12 @@
 """FastAPI application for Insights On Premise."""
 
 import asyncio
+import json
 import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import (
     BackgroundTasks,
@@ -94,7 +95,7 @@ async def _cleanup_old_request_reports(session_factory, config):
         await asyncio.sleep(config.request_report_cleanup_interval_minutes * 60)
         db = session_factory()
         try:
-            cutoff = datetime.utcnow() - timedelta(
+            cutoff = datetime.now(timezone.utc) - timedelta(
                 hours=config.request_report_retention_hours
             )
             deleted = RequestReport.delete_older_than(db, cutoff)
@@ -350,8 +351,6 @@ async def get_request_report(
 
     Returns 404 if the request has not been processed yet.
     """
-    import json
-
     record = RequestReport.get_by_cluster_and_request(db, cluster_id, request_id)
     if not record:
         raise HTTPException(

@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
 
@@ -234,7 +234,7 @@ class ProcessorService:
             report_data = {
                 "cluster_id": cluster_id,
                 "rule_count": len(rule_hits),
-                "processed_at": datetime.utcnow().isoformat(),
+                "processed_at": datetime.now(timezone.utc).isoformat(),
                 "results": results_json,
             }
 
@@ -242,7 +242,7 @@ class ProcessorService:
                 db,
                 cluster=cluster_id,
                 report=json.dumps(report_data),
-                gathered_at=datetime.utcnow(),
+                gathered_at=datetime.now(timezone.utc),
             )
 
             # Upsert new rule hits (preserves impacted_since for existing ones)
