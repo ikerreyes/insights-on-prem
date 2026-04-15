@@ -43,6 +43,7 @@ from app.services.report_service import ReportService
 from app.services.thanos_service import ThanosService
 from app.services.upgrade_prediction_service import UpgradePredictionService
 from app.services.upload_service import UploadService
+from app.utils.content import normalize_rule_fqdn
 
 logger = logging.getLogger(__name__)
 
@@ -342,6 +343,7 @@ async def get_request_status(
     },
 )
 async def get_request_report(
+    request: Request,
     cluster_id: str,
     request_id: str,
     db: Session = Depends(get_db),
@@ -358,17 +360,23 @@ async def get_request_report(
             detail="Request ID not found for given cluster_id",
         )
 
+    content_service = request.app.state.content_service
+
     try:
         rule_hits_raw = json.loads(record.report)
-        rule_hits = [
-            SimplifiedRuleHit(
-                rule_fqdn=hit.get("rule_fqdn", ""),
-                error_key=hit.get("error_key", ""),
-                description=hit.get("description", ""),
-                total_risk=hit.get("total_risk", 0),
-            )
-            for hit in rule_hits_raw
-        ]
+        rule_hits = []
+        for hit in rule_hits_raw:
+            rule_fqdn = normalize_rule_fqdn(hit.get("rule_fqdn", ""))
+            error_key = hit.get("error_key", "")
+            content = content_service.get_content(rule_fqdn, error_key)
+            if not content:
+                continue
+            rule_hits.append(SimplifiedRuleHit(
+                rule_fqdn=rule_fqdn,
+                error_key=error_key,
+                description=content.get("description", ""),
+                total_risk=content.get("total_risk", 0),
+            ))
     except (json.JSONDecodeError, TypeError):
         rule_hits = []
 
