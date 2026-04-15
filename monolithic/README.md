@@ -27,6 +27,18 @@ POST /api/insights-results-aggregator/v2/upgrade-risks-prediction
 ```
 Returns upgrade risk predictions for a list of clusters by querying Thanos for active alerts and failing operator conditions. Matches the `ccx-upgrades-data-eng` API format so the ACM console can route URP calls to this service instead of `console.redhat.com`.
 
+### Get Request Processing Status (on-demand data gathering)
+```
+GET /api/v2/cluster/{cluster_id}/request/{request_id}/status
+```
+Check whether an on-demand data gathering request has been processed. Returns 404 while processing is in progress (the operator retries), 200 once ready.
+
+### Get Request Report (on-demand data gathering)
+```
+GET /api/v2/cluster/{cluster_id}/request/{request_id}/report
+```
+Retrieve the simplified report for a specific on-demand data gathering request ID.
+
 ### Health Check
 ```
 GET /health
@@ -84,6 +96,11 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 - MultiClusterHub created in `open-cluster-management` namespace (it can take several minutes before all components are started)
 - Quay pull secret for `ccxdev/insights-on-premise-poc` repository saved as `deploy/ccxdev-insights-on-prem-poc-secret.yml`
 - (optional) Have Multicluster Observability Operator deployed according to [these instructions](https://github.com/stolostron/multicluster-observability-operator/tree/main?tab=readme-ov-file#run-the-operator-in-the-cluster) - required for upgrade risk predictions
+- (optional) TechPreview enabled on the hub cluster — required for on-demand data gathering. **Warning:** this is irreversible.
+  ```bash
+  oc patch featuregate cluster --type merge -p '{"spec":{"featureSet":"TechPreviewNoUpgrade"}}'
+  oc wait co machine-config --for='condition=Progressing=False' --timeout=30m
+  ```
 
 ### Deploy
 
@@ -125,6 +142,69 @@ oc logs -f deployment/insights-on-prem -n insights-on-prem-poc
   ```bash
   oc annotate multiclusterhub multiclusterhub -n open-cluster-management mch-pause- --overwrite
   ```
+
+## On-Demand Data Gathering
+
+On-demand data gathering allows triggering Insights data collection outside the regular periodic schedule. Instead of waiting for the next periodic upload (default 2h, set to 1m by `deploy.sh`), you can request an immediate gather-and-upload cycle and get results for that specific request.
+
+> **Note:** Conditional data gathering is not supported at this moment. Disable the `conditional` gatherer in the `DataGather` CR to avoid unnecessary calls to `console.redhat.com` for gathering rules.
+
+### How to Trigger
+
+Create a `DataGather` custom resource:
+
+```bash
+oc apply -f - <<'EOF'
+apiVersion: insights.openshift.io/v1alpha2
+kind: DataGather
+metadata:
+  name: on-demand-test
+spec:
+  gatherers:
+    mode: Custom
+    custom:
+      configs:
+      - name: conditional
+        state: Disabled
+  storage:
+    type: Ephemeral
+EOF
+```
+
+The insights-operator detects the new CR, creates a Job in `openshift-insights`, and the Job:
+1. Runs all gatherers and writes an archive
+2. Uploads the archive to the on-prem service
+3. Polls the processing status endpoint until the archive is processed
+4. Logs success — the operator then fetches the report for the specific request ID
+
+### Monitoring
+
+Watch the Job and its logs:
+
+```bash
+# Check job status
+oc get jobs -n openshift-insights | grep -v periodic
+
+# Follow the job pod logs
+oc logs -n openshift-insights -l job-name=on-demand-test -f
+
+# Check the DataGather CR status
+oc get datagather on-demand-test -o yaml
+```
+
+The `DataGather` CR status conditions show the lifecycle:
+- `DataRecorded` — archive written to disk
+- `DataUploaded` — archive uploaded to the on-prem service
+- `DataProcessed` — archive processed and results available
+
+### Cleanup
+
+Jobs and `DataGather` CRs older than 24 hours are automatically pruned by the operator. To delete manually:
+
+```bash
+oc delete datagather on-demand-test
+oc delete job on-demand-test -n openshift-insights
+```
 
 ## How to trigger an Insights recommendation
 
