@@ -20,23 +20,23 @@ spec:
           protocol: TCP
         env:
         - name: POSTGRES_HOST
-          value: "search-postgres.open-cluster-management.svc.cluster.local"
+          value: "insights-postgres"
         - name: POSTGRES_PORT
           value: "5432"
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: search-postgres
+              name: insights-postgres
               key: database-user
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: search-postgres
+              name: insights-postgres
               key: database-password
         - name: POSTGRES_DB
           valueFrom:
             secretKeyRef:
-              name: search-postgres
+              name: insights-postgres
               key: database-name
       imagePullSecrets:
       - name: ccxdev-insights-on-prem-poc-pull-secret

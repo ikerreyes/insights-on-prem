@@ -7,10 +7,8 @@ echo "=== Deploying Insights On-Premise POC ==="
 echo "1. Creating namespace..."
 oc apply -f deploy/namespace.yml
 
-echo "2. Copying PostgreSQL secret..."
-oc get secret search-postgres -n open-cluster-management -o json | \
-  jq 'del(.metadata.namespace, .metadata.uid, .metadata.resourceVersion, .metadata.creationTimestamp, .metadata.ownerReferences) | .metadata.namespace = "insights-on-prem-poc"' | \
-  oc apply --namespace insights-on-prem-poc -f -
+echo "2. Deploying PostgreSQL..."
+oc apply -f deploy/postgres.yml --namespace insights-on-prem-poc
 
 echo "3. Applying secrets..."
 oc apply -f deploy/ccxdev-insights-on-prem-poc-secret.yml --namespace insights-on-prem-poc
