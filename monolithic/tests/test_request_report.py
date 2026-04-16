@@ -1,6 +1,6 @@
 """Tests for RequestReport model and on-demand gathering endpoints."""
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -92,18 +92,18 @@ def test_delete_older_than(db_session):
         request_id="old-req",
         cluster_id="cluster-1",
         report="[]",
-        created_at=datetime.utcnow() - timedelta(hours=48),
+        created_at=datetime.now(timezone.utc) - timedelta(hours=48),
     )
     new_record = RequestReport(
         request_id="new-req",
         cluster_id="cluster-2",
         report="[]",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db_session.add_all([old_record, new_record])
     db_session.commit()
 
-    cutoff = datetime.utcnow() - timedelta(hours=24)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     deleted = RequestReport.delete_older_than(db_session, cutoff)
     db_session.commit()
 
@@ -123,7 +123,7 @@ def test_delete_older_than_none_to_delete(db_session):
     )
     db_session.commit()
 
-    cutoff = datetime.utcnow() - timedelta(hours=24)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     deleted = RequestReport.delete_older_than(db_session, cutoff)
     assert deleted == 0
 
