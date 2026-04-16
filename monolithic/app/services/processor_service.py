@@ -215,7 +215,7 @@ class ProcessorService:
         return rule_hits
 
     def save_results(
-        self, db: Session, cluster_id: str, results_json: str, request_id: str = None,
+        self, db: Session, cluster_id: str, results_json: str, request_id: str,
     ) -> int:
         """
         Save processing results to database.
@@ -223,7 +223,7 @@ class ProcessorService:
         :param db: Database session
         :param cluster_id: Cluster identifier
         :param results_json: JSON results from insights-core
-        :param request_id: Optional request ID for on-demand gathering
+        :param request_id: Request ID for on-demand gathering tracking
         :return: Number of rule hits saved
         """
         # Extract rule hits from results
@@ -290,7 +290,7 @@ class ProcessorService:
     def process_archive(self, db: Session, archive_path: str) -> tuple[str, int]:
 =======
     def process_archive(
-        self, db: Session, archive_path: str, request_id: str = None,
+        self, db: Session, archive_path: str, request_id: str,
     ) -> Tuple[str, int]:
 >>>>>>> c51e9ad (Add on demand data gathering endpoints)
         """

@@ -152,7 +152,7 @@ def test_save_results_success(processor_service, database):
         [("ccx_rules_ocp.external.rules.example.report", "ERROR_KEY")]
     )
 
-    count = processor_service.save_results(database, cluster_id, results_json)
+    count = processor_service.save_results(database, cluster_id, results_json, "req-1")
 
     assert count == 1
 
@@ -204,7 +204,7 @@ def test_save_results_replaces_old_rule_hits(processor_service, database):
     # Save new results with different rules
     results_json = _make_results_json([("new_rule", "NEW_KEY")])
 
-    processor_service.save_results(database, cluster_id, results_json)
+    processor_service.save_results(database, cluster_id, results_json, "req-2")
 
     # Verify only new rule exists
     new_hits = database.query(RuleHit).filter_by(cluster_id=cluster_id).all()
@@ -218,7 +218,7 @@ def test_save_results_empty_rule_hits(processor_service, database):
     cluster_id = "test-cluster-123"
     results_json = json.dumps({"reports": []})
 
-    count = processor_service.save_results(database, cluster_id, results_json)
+    count = processor_service.save_results(database, cluster_id, results_json, "req-3")
 
     assert count == 0
 
@@ -278,7 +278,7 @@ def test_process_archive_extraction_fails(mock_extract, processor_service, datab
     mock_extract.side_effect = Exception("Extraction failed")
 
     with pytest.raises(ProcessingError, match="Analysis failed"):
-        processor_service.process_archive(database, "/fake/archive.tar.gz")
+        processor_service.process_archive(database, "/fake/archive.tar.gz", "req-5")
 
 
 @patch("app.services.processor_service.extract")
