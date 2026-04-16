@@ -22,7 +22,7 @@ def upgrade() -> None:
         sa.Column('request_id', sa.VARCHAR(), nullable=False),
         sa.Column('cluster_id', sa.VARCHAR(), nullable=False),
         sa.Column('report', sa.VARCHAR(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('request_id', name='request_report_pkey')
     )
 

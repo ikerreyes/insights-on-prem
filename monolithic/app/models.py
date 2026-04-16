@@ -172,7 +172,7 @@ class RequestReport(Base):
     request_id = Column(VARCHAR, nullable=False, primary_key=True)
     cluster_id = Column(VARCHAR, nullable=False)
     report = Column(VARCHAR, nullable=False)
-    created_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         Index("idx_request_report_created_at", "created_at"),
