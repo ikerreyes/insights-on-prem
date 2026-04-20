@@ -11,6 +11,7 @@ class UploadResponse(BaseModel):
 
     request_id: str = Field(..., description="Unique request identifier")
     status: str = Field(..., description="Processing status")
+    uploaded_at: datetime = Field(..., description="Upload timestamp")
 
 
 class ErrorResponse(BaseModel):
