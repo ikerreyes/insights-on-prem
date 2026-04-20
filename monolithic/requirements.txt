@@ -1,6 +1,6 @@
 # CCX packages require Red Hat internal Nexus repository
 # Using --index-url to keep PyPI for standard packages
---index-url https://nexus.corp.redhat.com/repository/obsint-pypi/simple/
+# --index-url https://nexus.corp.redhat.com/repository/obsint-pypi/simple/
 
 # FastAPI and web framework
 fastapi>=0.109.0
