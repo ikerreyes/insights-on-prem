@@ -9,6 +9,8 @@ from app.exceptions import ProcessingError
 from app.models import Report, RuleHit
 from app.services.processor_service import ProcessorService
 
+REQUEST_ID = "00000000-0000-0000-0000-000000000000"
+
 
 @pytest.fixture
 def service_config(tmp_path):
@@ -152,7 +154,7 @@ def test_save_results_success(processor_service, database):
         [("ccx_rules_ocp.external.rules.example.report", "ERROR_KEY")]
     )
 
-    count = processor_service.save_results(database, cluster_id, results_json, "req-1")
+    count = processor_service.save_results(database, cluster_id, results_json, REQUEST_ID)
 
     assert count == 1
 
@@ -204,7 +206,7 @@ def test_save_results_replaces_old_rule_hits(processor_service, database):
     # Save new results with different rules
     results_json = _make_results_json([("new_rule", "NEW_KEY")])
 
-    processor_service.save_results(database, cluster_id, results_json, "req-2")
+    processor_service.save_results(database, cluster_id, results_json, REQUEST_ID)
 
     # Verify only new rule exists
     new_hits = database.query(RuleHit).filter_by(cluster_id=cluster_id).all()
@@ -218,7 +220,7 @@ def test_save_results_empty_rule_hits(processor_service, database):
     cluster_id = "test-cluster-123"
     results_json = json.dumps({"reports": []})
 
-    count = processor_service.save_results(database, cluster_id, results_json, "req-3")
+    count = processor_service.save_results(database, cluster_id, results_json, REQUEST_ID)
 
     assert count == 0
 
@@ -264,9 +266,13 @@ def test_process_archive_success(
         mock_output.read.return_value = test_results
         mock_stringio.return_value = mock_output
 
+<<<<<<< HEAD
         cluster_id, count = processor_service.process_archive(
             database, "/fake/archive.tar.gz"
         )
+=======
+        cluster_id, count = processor_service.process_archive(database, "/fake/archive.tar.gz", REQUEST_ID)
+>>>>>>> 3ee2c57 (Use constant test IDs in processor and request report tests)
 
     assert cluster_id == "test-cluster-123"
     assert count == 1
@@ -278,7 +284,7 @@ def test_process_archive_extraction_fails(mock_extract, processor_service, datab
     mock_extract.side_effect = Exception("Extraction failed")
 
     with pytest.raises(ProcessingError, match="Analysis failed"):
-        processor_service.process_archive(database, "/fake/archive.tar.gz", "req-5")
+        processor_service.process_archive(database, "/fake/archive.tar.gz", REQUEST_ID)
 
 
 @patch("app.services.processor_service.extract")
@@ -291,8 +297,14 @@ def test_process_archive_size_limit_exceeded(mock_extract, service_config, tmp_p
     mock_extraction.tmp_dir = str(tmp_path / "extraction")
     mock_extract.return_value.__enter__.return_value = mock_extraction
 
+<<<<<<< HEAD
     with (
         patch.object(service, "_validate_size", return_value=False),
         pytest.raises(ProcessingError, match="Archive exceeds size limit"),
     ):
         service.process_archive(Mock(), "/fake/archive.tar.gz")
+=======
+    with patch.object(service, '_validate_size', return_value=False):
+        with pytest.raises(ProcessingError, match="Archive exceeds size limit"):
+            service.process_archive(Mock(), "/fake/archive.tar.gz", REQUEST_ID)
+>>>>>>> 3ee2c57 (Use constant test IDs in processor and request report tests)
