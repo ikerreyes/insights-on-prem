@@ -1,10 +1,11 @@
 """Tests for database models."""
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+import json
 
 import pytest
 from app.database import Base
-from app.models import Report, RuleHit
+from app.models import Report, RequestReport, RuleHit
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -218,3 +219,109 @@ def test_rule_hit_composite_primary_key(db_session):
     # Should have 3 distinct records
     total_count = db_session.query(RuleHit).count()
     assert total_count == 3
+
+
+# --- RequestReport model tests ---
+
+REQUEST_ID = "00000000-0000-0000-0000-000000000000"
+CLUSTER_ID = "00000000-0000-0000-0000-000000000001"
+
+
+def test_create_request_report(db_session):
+    """Test creating a new request report."""
+    report_data = json.dumps([
+        {"rule_fqdn": "test.rule", "error_key": "ERROR1", "details": {}}
+    ])
+
+    record = RequestReport.create(
+        db=db_session,
+        request_id=REQUEST_ID,
+        cluster_id=CLUSTER_ID,
+        report=report_data,
+    )
+    db_session.commit()
+
+    assert record.request_id == REQUEST_ID
+    assert record.cluster_id == CLUSTER_ID
+    assert record.report == report_data
+    assert isinstance(record.created_at, datetime)
+
+
+def test_get_by_cluster_and_request(db_session):
+    """Test retrieving a request report by cluster and request ID."""
+    RequestReport.create(
+        db=db_session,
+        request_id=REQUEST_ID,
+        cluster_id=CLUSTER_ID,
+        report="[]",
+    )
+    db_session.commit()
+
+    found = RequestReport.get_by_cluster_and_request(
+        db_session, CLUSTER_ID, REQUEST_ID
+    )
+    assert found is not None
+    assert found.request_id == REQUEST_ID
+
+    not_found = RequestReport.get_by_cluster_and_request(
+        db_session, CLUSTER_ID, "nonexistent"
+    )
+    assert not_found is None
+
+
+def test_get_by_cluster_and_request_wrong_cluster(db_session):
+    """Test that lookup with wrong cluster_id returns None."""
+    RequestReport.create(
+        db=db_session,
+        request_id=REQUEST_ID,
+        cluster_id=CLUSTER_ID,
+        report="[]",
+    )
+    db_session.commit()
+
+    result = RequestReport.get_by_cluster_and_request(
+        db_session, "wrong-cluster", REQUEST_ID
+    )
+    assert result is None
+
+
+def test_delete_older_than(db_session):
+    """Test deleting records older than a cutoff."""
+    old_record = RequestReport(
+        request_id="old-req",
+        cluster_id=CLUSTER_ID,
+        report="[]",
+        created_at=datetime.now(timezone.utc) - timedelta(hours=48),
+    )
+    new_record = RequestReport(
+        request_id=REQUEST_ID,
+        cluster_id=CLUSTER_ID,
+        report="[]",
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add_all([old_record, new_record])
+    db_session.commit()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    deleted = RequestReport.delete_older_than(db_session, cutoff)
+    db_session.commit()
+
+    assert deleted == 1
+    assert db_session.query(RequestReport).count() == 1
+    remaining = db_session.query(RequestReport).first()
+    assert remaining.request_id == REQUEST_ID
+
+
+def test_delete_older_than_none_to_delete(db_session):
+    """Test delete with no old records returns 0."""
+    RequestReport.create(
+        db=db_session,
+        request_id=REQUEST_ID,
+        cluster_id=CLUSTER_ID,
+        report="[]",
+    )
+    db_session.commit()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    deleted = RequestReport.delete_older_than(db_session, cutoff)
+    assert deleted == 0

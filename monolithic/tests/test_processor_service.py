@@ -266,13 +266,9 @@ def test_process_archive_success(
         mock_output.read.return_value = test_results
         mock_stringio.return_value = mock_output
 
-<<<<<<< HEAD
         cluster_id, count = processor_service.process_archive(
             database, "/fake/archive.tar.gz"
         )
-=======
-        cluster_id, count = processor_service.process_archive(database, "/fake/archive.tar.gz", REQUEST_ID)
->>>>>>> 3ee2c57 (Use constant test IDs in processor and request report tests)
 
     assert cluster_id == "test-cluster-123"
     assert count == 1
@@ -297,14 +293,8 @@ def test_process_archive_size_limit_exceeded(mock_extract, service_config, tmp_p
     mock_extraction.tmp_dir = str(tmp_path / "extraction")
     mock_extract.return_value.__enter__.return_value = mock_extraction
 
-<<<<<<< HEAD
     with (
         patch.object(service, "_validate_size", return_value=False),
         pytest.raises(ProcessingError, match="Archive exceeds size limit"),
     ):
         service.process_archive(Mock(), "/fake/archive.tar.gz")
-=======
-    with patch.object(service, '_validate_size', return_value=False):
-        with pytest.raises(ProcessingError, match="Archive exceeds size limit"):
-            service.process_archive(Mock(), "/fake/archive.tar.gz", REQUEST_ID)
->>>>>>> 3ee2c57 (Use constant test IDs in processor and request report tests)
