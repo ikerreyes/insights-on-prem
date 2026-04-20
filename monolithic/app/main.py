@@ -370,6 +370,7 @@ async def get_request_report(
             error_key = hit.get("error_key", "")
             content = content_service.get_content(rule_fqdn, error_key)
             if not content:
+                logger.warning(f"Content not found for rule {rule_fqdn} error_key {error_key}, skipping")
                 continue
             rule_hits.append(SimplifiedRuleHit(
                 rule_fqdn=rule_fqdn,
