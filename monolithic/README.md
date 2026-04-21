@@ -147,7 +147,7 @@ oc logs -f deployment/insights-on-prem -n insights-on-prem-poc
 
 On-demand data gathering allows triggering Insights data collection outside the regular periodic schedule. Instead of waiting for the next periodic upload (default 2h, set to 1m by `deploy.sh`), you can request an immediate gather-and-upload cycle and get results for that specific request.
 
-> **Note:** Conditional data gathering is not supported at this moment. Disable the `conditional` gatherer in the `DataGather` CR to avoid unnecessary calls to `console.redhat.com` for gathering rules.
+> **Note:** Conditional data gathering is not supported at this moment. Disable the `conditional` gatherer in the `DataGather` CR to avoid unnecessary calls to `console.redhat.com` for gathering rules (as shown in the following section).
 
 ### How to Trigger
 
