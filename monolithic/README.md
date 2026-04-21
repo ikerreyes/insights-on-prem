@@ -199,7 +199,7 @@ The `DataGather` CR status conditions show the lifecycle:
 
 ### Cleanup
 
-Jobs and `DataGather` CRs older than 24 hours are automatically pruned by the operator. To delete manually:
+Jobs and `DataGather` CRs older than 24 hours are automatically pruned by the Insights Operator. To delete manually:
 
 ```bash
 oc delete datagather on-demand-test
