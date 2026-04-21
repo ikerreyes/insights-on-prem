@@ -298,7 +298,7 @@ class ProcessorService:
 
         :param db: Database session
         :param archive_path: Path to uploaded archive file
-        :param request_id: Optional request ID for on-demand gathering
+        :param request_id: Request ID for on-demand gathering
         :return: Tuple of (cluster_id, number of rules found)
         :raises ProcessingError: If processing fails at any stage
         """
