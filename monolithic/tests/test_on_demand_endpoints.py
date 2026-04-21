@@ -68,10 +68,18 @@ def test_request_report_returns_simplified_report(database):
     """Test report endpoint enriches rule hits with content (description, total_risk)."""
     from unittest.mock import MagicMock
 
+    # Rules with description/total_risk have content,
+    # rules without them simulate missing content (skipped in response)
+    test_rules = [
+        {"rule_fqdn": "ccx_rules_ocp.external.rules.rule_a", "error_key": "ERR1", "description": "Rule A fires when ...", "total_risk": 3},
+        {"rule_fqdn": "ccx_rules_ocp.external.rules.rule_b", "error_key": "ERR2", "description": "Rule B detects ...", "total_risk": 1},
+        {"rule_fqdn": "ccx_rules_ocp.external.rules.unknown", "error_key": "ERR3"},
+    ]
+
+    # Build stored report — rule_fqdn has .report suffix as stored by processor
     rule_hits = [
-        {"rule_fqdn": "ccx_rules_ocp.external.rules.rule_a.report", "error_key": "ERR1", "details": {}},
-        {"rule_fqdn": "ccx_rules_ocp.external.rules.rule_b.report", "error_key": "ERR2", "details": {}},
-        {"rule_fqdn": "ccx_rules_ocp.external.rules.unknown.report", "error_key": "ERR3", "details": {}},
+        {"rule_fqdn": r["rule_fqdn"] + ".report", "error_key": r["error_key"], "details": {}}
+        for r in test_rules
     ]
     RequestReport.create(
         db=database,
@@ -81,18 +89,13 @@ def test_request_report_returns_simplified_report(database):
     )
     database.commit()
 
-    # Mock content service — return content for first two rules, None for the third
+    # Mock content service — return content only for rules that have it
     mock_content = MagicMock()
-    mock_content.get_content.side_effect = lambda fqdn, ek: {
-        ("ccx_rules_ocp.external.rules.rule_a", "ERR1"): {
-            "description": "Rule A fires when ...",
-            "total_risk": 3,
-        },
-        ("ccx_rules_ocp.external.rules.rule_b", "ERR2"): {
-            "description": "Rule B detects ...",
-            "total_risk": 1,
-        },
-    }.get((fqdn, ek))
+    content_map = {
+        (r["rule_fqdn"], r["error_key"]): {"description": r["description"], "total_risk": r["total_risk"]}
+        for r in test_rules if "description" in r
+    }
+    mock_content.get_content.side_effect = lambda fqdn, ek: content_map.get((fqdn, ek))
 
     app.state.content_service = mock_content
     try:
@@ -107,10 +110,9 @@ def test_request_report_returns_simplified_report(database):
     assert data["cluster"] == CLUSTER_ID
     assert data["requestID"] == REQUEST_ID
     assert data["status"] == "processed"
-    # Third rule had no content — skipped (matches smart-proxy behavior)
-    assert len(data["report"]) == 2
-    assert data["report"][0]["rule_fqdn"] == "ccx_rules_ocp.external.rules.rule_a"
-    assert data["report"][0]["description"] == "Rule A fires when ..."
-    assert data["report"][0]["total_risk"] == 3
-    assert data["report"][1]["error_key"] == "ERR2"
-    assert data["report"][1]["total_risk"] == 1
+    # Rules without content are skipped (matches smart-proxy behavior)
+    expected = [r for r in test_rules if "description" in r]
+    assert len(data["report"]) == len(expected)
+    for i, exp in enumerate(expected):
+        for key, value in exp.items():
+            assert data["report"][i][key] == value
