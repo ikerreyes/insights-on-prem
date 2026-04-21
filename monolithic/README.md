@@ -96,7 +96,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 - MultiClusterHub created in `open-cluster-management` namespace (it can take several minutes before all components are started)
 - Quay pull secret for `ccxdev/insights-on-premise-poc` repository saved as `deploy/ccxdev-insights-on-prem-poc-secret.yml`
 - (optional) Have Multicluster Observability Operator deployed according to [these instructions](https://github.com/stolostron/multicluster-observability-operator/tree/main?tab=readme-ov-file#run-the-operator-in-the-cluster) - required for upgrade risk predictions
-- (optional) TechPreview enabled on the hub cluster — required for on-demand data gathering. **Warning:** this is irreversible.
+- (optional) TechPreview enabled on the hub cluster — required for on-demand data gathering on clustering running Openshift versions <= 1.21. **Warning:** this is irreversible.
   ```bash
   oc patch featuregate cluster --type merge -p '{"spec":{"featureSet":"TechPreviewNoUpgrade"}}'
   oc wait co machine-config --for='condition=Progressing=False' --timeout=30m
