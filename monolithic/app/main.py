@@ -350,6 +350,8 @@ async def get_request_report(
 ):
     """
     Retrieve the simplified report for an on-demand data gathering request.
+    The raw report from DB does not include rules content, so the endpoint
+    also repopulates with that (description and total risk).
 
     Returns 404 if the request has not been processed yet.
     """
