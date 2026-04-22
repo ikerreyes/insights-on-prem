@@ -105,7 +105,10 @@ async def _cleanup_old_request_reports(session_factory, config):
                 logger.info(f"Cleaned up {deleted} old request reports")
         except Exception as e:
             logger.error(f"Request report cleanup failed: {e}")
-            db.rollback()
+            try:
+                db.rollback()
+            except Exception as rollback_err:
+                logger.error(f"Rollback also failed: {rollback_err}")
         finally:
             db.close()
 
