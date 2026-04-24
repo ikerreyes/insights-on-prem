@@ -1,15 +1,15 @@
 """Tests for upload endpoint."""
+
 import tempfile
 from io import BytesIO
 from unittest.mock import Mock
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import sessionmaker
-
 from app.config import AppConfig
 from app.main import app
 from app.services.upload_service import UploadService
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
 
 client = TestClient(app)
 
@@ -45,10 +45,7 @@ def test_upload_invalid_file_format(upload_service):
     """Test upload with invalid file format."""
     files = {"file": ("test.txt", BytesIO(b"test data"), "text/plain")}
 
-    response = client.post(
-        "/api/ingress/v1/upload",
-        files=files
-    )
+    response = client.post("/api/ingress/v1/upload", files=files)
 
     assert response.status_code == 400
     assert "tar" in response.json()["error"].lower()
@@ -58,10 +55,7 @@ def test_upload_no_filename(upload_service):
     """Test upload without filename."""
     files = {"file": ("", BytesIO(b"test data"), "application/gzip")}
 
-    response = client.post(
-        "/api/ingress/v1/upload",
-        files=files
-    )
+    response = client.post("/api/ingress/v1/upload", files=files)
 
     # FastAPI returns 422 for empty filename (validation at framework level)
     assert response.status_code == 422

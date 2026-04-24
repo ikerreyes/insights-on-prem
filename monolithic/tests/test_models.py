@@ -1,12 +1,12 @@
 """Tests for database models."""
+
 from datetime import datetime
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.database import Base
 from app.models import Report, RuleHit
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 
 @pytest.fixture
@@ -14,8 +14,8 @@ def db_session():
     """Create an in-memory SQLite database for testing."""
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
+    session_local = sessionmaker(bind=engine)
+    session = session_local()
     yield session
     session.close()
 
@@ -129,6 +129,7 @@ def test_rule_hit_upsert_existing(db_session):
 
     # Small delay to ensure different timestamp
     import time
+
     time.sleep(0.01)
 
     # Update
@@ -161,9 +162,15 @@ def test_rule_hit_delete_for_cluster(db_session):
     cluster_id = "test-cluster-delete"
 
     # Insert multiple rule hits
-    RuleHit.upsert(db=db_session, cluster_id=cluster_id, rule_fqdn="rule1", error_key="ERROR1")
-    RuleHit.upsert(db=db_session, cluster_id=cluster_id, rule_fqdn="rule2", error_key="ERROR2")
-    RuleHit.upsert(db=db_session, cluster_id=cluster_id, rule_fqdn="rule3", error_key="ERROR3")
+    RuleHit.upsert(
+        db=db_session, cluster_id=cluster_id, rule_fqdn="rule1", error_key="ERROR1"
+    )
+    RuleHit.upsert(
+        db=db_session, cluster_id=cluster_id, rule_fqdn="rule2", error_key="ERROR2"
+    )
+    RuleHit.upsert(
+        db=db_session, cluster_id=cluster_id, rule_fqdn="rule3", error_key="ERROR3"
+    )
     db_session.commit()
 
     # Verify they exist
@@ -194,11 +201,17 @@ def test_rule_hit_composite_primary_key(db_session):
     cluster_id = "test-cluster"
 
     # Insert two different error keys for same rule
-    RuleHit.upsert(db=db_session, cluster_id=cluster_id, rule_fqdn="rule1", error_key="ERROR1")
-    RuleHit.upsert(db=db_session, cluster_id=cluster_id, rule_fqdn="rule1", error_key="ERROR2")
+    RuleHit.upsert(
+        db=db_session, cluster_id=cluster_id, rule_fqdn="rule1", error_key="ERROR1"
+    )
+    RuleHit.upsert(
+        db=db_session, cluster_id=cluster_id, rule_fqdn="rule1", error_key="ERROR2"
+    )
 
     # Insert same rule for different cluster
-    RuleHit.upsert(db=db_session, cluster_id="other-cluster", rule_fqdn="rule1", error_key="ERROR1")
+    RuleHit.upsert(
+        db=db_session, cluster_id="other-cluster", rule_fqdn="rule1", error_key="ERROR1"
+    )
 
     db_session.commit()
 

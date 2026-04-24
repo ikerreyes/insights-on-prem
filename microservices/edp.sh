@@ -7,9 +7,16 @@
 #   oc secrets link default quay-pull-secret --for=pull -n edp-processing
 
 set -e
-confirm() { read -p "$1 (y/n) " -n 1 -r && echo; [[ $REPLY =~ ^[Yy]$ ]]; }
+confirm() { read -r -p "$1 (y/n) " -n 1 && echo; [[ $REPLY =~ ^[Yy]$ ]]; }
 wait_ready() { oc wait --for=condition=ready pod -l "$2" -n "$1" --timeout=300s && echo "✓ $3"; }
-check_pod() { oc get pod -l "$2" -n "$1" -o jsonpath='{.items[0].status.phase}' 2>/dev/null | grep -q "Running" && echo "✓ $3" || { echo "❌ $3"; FAILED=1; }; }
+check_pod() {
+    if oc get pod -l "$2" -n "$1" -o jsonpath='{.items[0].status.phase}' 2>/dev/null | grep -q "Running"; then
+        echo "✓ $3"
+    else
+        echo "❌ $3"
+        FAILED=1
+    fi
+}
 
 setup_kafka() {
     echo "=== Kafka ==="
@@ -54,7 +61,7 @@ expose_services() {
     echo "=== Routes ==="
     oc get ns edp-processing &>/dev/null || { echo "❌ Namespace not found"; return 1; }
     for svc in "ingress:3000" "smart-proxy:8080" "content-service:8081"; do
-        IFS=: read name port <<< "$svc"
+        IFS=: read -r name port <<< "$svc"
         oc get route $name -n edp-processing &>/dev/null || oc create route edge $name --service=$name --port=$port -n edp-processing
     done
     for svc in ingress smart-proxy content-service; do
@@ -104,7 +111,7 @@ setup_all() {
 
 cleanup() {
     echo "WARNING: Deletes edp-processing, kafka namespaces, and insights config"
-    read -p "Type 'yes': " C
+    read -r -p "Type 'yes': " C
     [ "$C" != "yes" ] && return 1
     oc get secret support -n openshift-config &>/dev/null && oc delete secret support -n openshift-config && \
         oc delete pod -n openshift-insights -l app=insights-operator 2>/dev/null || true
@@ -125,7 +132,12 @@ verify() {
     echo "=== Kafka ==="
     check_pod kafka name=strimzi-cluster-operator "Strimzi"
     check_pod kafka strimzi.io/name=edp-kafka-kafka "Broker"
-    oc get kafka edp-kafka -n kafka -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null | grep -q "True" && echo "✓ Cluster" || { echo "❌ Cluster"; FAILED=1; }
+    if oc get kafka edp-kafka -n kafka -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null | grep -q "True"; then
+        echo "✓ Cluster"
+    else
+        echo "❌ Cluster"
+        FAILED=1
+    fi
 
     echo -e "\n=== Infrastructure ==="
     for app in postgresql redis minio mock-oauth2-server identity-injector; do
@@ -140,7 +152,12 @@ verify() {
     echo -e "\n=== Topics ==="
     T=$(oc exec -n kafka edp-kafka-dual-role-0 -- bin/kafka-topics.sh --bootstrap-server localhost:9092 --list 2>/dev/null)
     for topic in platform.upload.announce ccx.ocp.results; do
-        echo "$T" | grep -q "$topic" && echo "✓ $topic" || { echo "❌ $topic"; FAILED=1; }
+        if echo "$T" | grep -q "$topic"; then
+            echo "✓ $topic"
+        else
+            echo "❌ $topic"
+            FAILED=1
+        fi
     done
 
     echo -e "\n=== Routes ==="

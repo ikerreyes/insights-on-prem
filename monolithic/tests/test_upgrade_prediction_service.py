@@ -1,6 +1,6 @@
 """Tests for UpgradePredictionService."""
-import pytest
 
+import pytest
 from app.services.thanos_service import Alert, OperatorCondition
 from app.services.upgrade_prediction_service import UpgradePredictionService
 
@@ -16,7 +16,13 @@ def service():
         # Alert-based test cases
         ([], [], True, 0, 0, None),
         (
-            [Alert(name="KubeAPIDown", namespace="openshift-kube-apiserver", severity="critical")],
+            [
+                Alert(
+                    name="KubeAPIDown",
+                    namespace="openshift-kube-apiserver",
+                    severity="critical",
+                )
+            ],
             [],
             True,
             0,
@@ -25,7 +31,11 @@ def service():
         ),
         (
             [
-                Alert(name="KubeAPIDown", namespace="openshift-kube-apiserver", severity="critical"),
+                Alert(
+                    name="KubeAPIDown",
+                    namespace="openshift-kube-apiserver",
+                    severity="critical",
+                ),
                 Alert(name="EtcdDown", namespace="openshift-etcd", severity="critical"),
             ],
             [],
@@ -36,9 +46,15 @@ def service():
         ),
         (
             [
-                Alert(name="Alert1", namespace="openshift-monitoring", severity="warning"),
-                Alert(name="Alert2", namespace="openshift-monitoring", severity="warning"),
-                Alert(name="Alert3", namespace="openshift-monitoring", severity="warning"),
+                Alert(
+                    name="Alert1", namespace="openshift-monitoring", severity="warning"
+                ),
+                Alert(
+                    name="Alert2", namespace="openshift-monitoring", severity="warning"
+                ),
+                Alert(
+                    name="Alert3", namespace="openshift-monitoring", severity="warning"
+                ),
             ],
             [],
             True,
@@ -49,8 +65,12 @@ def service():
         (
             [
                 Alert(name="Alert1", namespace="openshift-cnv", severity="critical"),
-                Alert(name="Alert2", namespace="openshift-storage", severity="critical"),
-                Alert(name="Alert3", namespace="openshift-logging", severity="critical"),
+                Alert(
+                    name="Alert2", namespace="openshift-storage", severity="critical"
+                ),
+                Alert(
+                    name="Alert3", namespace="openshift-logging", severity="critical"
+                ),
             ],
             [],
             True,
@@ -83,7 +103,13 @@ def service():
         # FOC-based test cases
         (
             [],
-            [OperatorCondition(name="authentication", condition="Not Available", reason="EndpointUnavailable")],
+            [
+                OperatorCondition(
+                    name="authentication",
+                    condition="Not Available",
+                    reason="EndpointUnavailable",
+                )
+            ],
             False,
             0,
             1,
@@ -108,7 +134,11 @@ def service():
         # Mixed alerts and FOCs test case
         (
             [
-                Alert(name="KubeAPIDown", namespace="openshift-kube-apiserver", severity="critical"),
+                Alert(
+                    name="KubeAPIDown",
+                    namespace="openshift-kube-apiserver",
+                    severity="critical",
+                ),
                 Alert(name="EtcdDown", namespace="openshift-etcd", severity="critical"),
             ],
             [OperatorCondition(name="authentication", condition="Not Available")],
@@ -133,22 +163,37 @@ def service():
     ],
 )
 def test_predict_upgrade_risk_conditions(
-    service, alerts, focs, expected_upgrade_recommended, expected_alert_count, expected_foc_count, expected_foc_condition
+    service,
+    alerts,
+    focs,
+    expected_upgrade_recommended,
+    expected_alert_count,
+    expected_foc_count,
+    expected_foc_condition,
 ):
     """Test various alert and operator condition filtering and risk triggering conditions."""
     result = service.predict(alerts, focs, "https://console.example.com")
     assert result.upgrade_recommended is expected_upgrade_recommended
     assert len(result.upgrade_risks_predictors.alerts) == expected_alert_count
-    assert len(result.upgrade_risks_predictors.operator_conditions) == expected_foc_count
+    assert (
+        len(result.upgrade_risks_predictors.operator_conditions) == expected_foc_count
+    )
     assert result.status == "ok"
     if expected_foc_condition is not None:
-        assert result.upgrade_risks_predictors.operator_conditions[0].condition == expected_foc_condition
+        assert (
+            result.upgrade_risks_predictors.operator_conditions[0].condition
+            == expected_foc_condition
+        )
 
 
 def test_alert_console_url(service):
     """Test that alert URLs are built correctly."""
     alerts = [
-        Alert(name="KubeAPIDown", namespace="openshift-kube-apiserver", severity="critical"),
+        Alert(
+            name="KubeAPIDown",
+            namespace="openshift-kube-apiserver",
+            severity="critical",
+        ),
         Alert(name="EtcdDown", namespace="openshift-etcd", severity="critical"),
     ]
     result = service.predict(alerts, [], "https://console.example.com")
@@ -170,7 +215,11 @@ def test_foc_console_url(service):
 def test_urls_none_when_no_console_url(service):
     """Test that URLs are None when console_url is empty."""
     alerts = [
-        Alert(name="KubeAPIDown", namespace="openshift-kube-apiserver", severity="critical"),
+        Alert(
+            name="KubeAPIDown",
+            namespace="openshift-kube-apiserver",
+            severity="critical",
+        ),
         Alert(name="EtcdDown", namespace="openshift-etcd", severity="critical"),
     ]
     focs = [

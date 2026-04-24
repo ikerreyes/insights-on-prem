@@ -1,6 +1,6 @@
 """Shared utilities for content handling."""
+
 from datetime import datetime
-from typing import Optional
 
 
 def normalize_rule_fqdn(rule_fqdn: str) -> str:
@@ -17,7 +17,7 @@ def normalize_rule_fqdn(rule_fqdn: str) -> str:
     return rule_fqdn.rsplit(".", 1)[0] if "." in rule_fqdn else rule_fqdn
 
 
-def format_datetime_rfc3339(dt: Optional[datetime]) -> Optional[str]:
+def format_datetime_rfc3339(dt: datetime | None) -> str | None:
     """
     Format datetime as RFC3339 string.
 
