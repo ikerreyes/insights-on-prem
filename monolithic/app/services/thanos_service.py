@@ -1,9 +1,9 @@
 """Service for querying Thanos (deployed by Multicluster Observability Operator)
 metrics via rbac-query-proxy."""
+
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
 
 import httpx
 
@@ -27,7 +27,7 @@ class Alert:
     """Alert extracted from Thanos metrics."""
 
     name: str
-    namespace: Optional[str] = None
+    namespace: str | None = None
     severity: str = ""
 
 
@@ -37,7 +37,7 @@ class OperatorCondition:
 
     name: str
     condition: str
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class ThanosService:
@@ -66,15 +66,15 @@ class ThanosService:
 
     def _parse_response(
         self, data: dict
-    ) -> Tuple[str, List[Alert], List[OperatorCondition]]:
+    ) -> tuple[str, list[Alert], list[OperatorCondition]]:
         """
         Parse raw response from Thanos API.
 
         :return: console_url, alerts, operator_conditions
         """
         console_url = ""
-        alerts: List[Alert] = []
-        operator_conditions: List[OperatorCondition] = []
+        alerts: list[Alert] = []
+        operator_conditions: list[OperatorCondition] = []
 
         results = data.get("data", {}).get("result", [])
 
@@ -85,7 +85,7 @@ class ThanosService:
 
             name = metric.get("__name__")
 
-            match name:  
+            match name:
                 case "console_url":
                     url = metric.get("url")
                     if url:
@@ -115,7 +115,7 @@ class ThanosService:
 
     def query_cluster_metrics(
         self, cluster_id: str
-    ) -> Tuple[str, List[Alert], List[OperatorCondition]]:
+    ) -> tuple[str, list[Alert], list[OperatorCondition]]:
         """
         Query Thanos for alerts and operator conditions for a cluster.
 

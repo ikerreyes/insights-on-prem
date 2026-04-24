@@ -1,5 +1,7 @@
 """Database models for Insights On Premise."""
+
 from datetime import datetime
+
 from sqlalchemy import Column, DateTime, PrimaryKeyConstraint
 from sqlalchemy.dialects.postgresql import VARCHAR, insert
 from sqlalchemy.orm import Session
@@ -153,7 +155,5 @@ class RuleHit(Base):
         :param cluster_id: Cluster identifier
         :return: Number of rows deleted
         """
-        count = (
-            db.query(cls).filter_by(cluster_id=cluster_id).delete()
-        )
+        count = db.query(cls).filter_by(cluster_id=cluster_id).delete()
         return count

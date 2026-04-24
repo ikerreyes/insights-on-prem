@@ -8,7 +8,7 @@ spec:
     metadata:
       name: insights-on-prem
       labels:
-        app: insights-on-prem 
+        app: insights-on-prem
     spec:
       serviceAccountName: insights-on-prem
       containers:

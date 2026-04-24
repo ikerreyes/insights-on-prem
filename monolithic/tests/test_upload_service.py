@@ -1,15 +1,15 @@
 """Tests for UploadService."""
+
 import os
 import tempfile
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
-from fastapi import BackgroundTasks
-
 from app.config import AppConfig
 from app.exceptions import ValidationError
 from app.schemas import UploadResponse
 from app.services.upload_service import UploadService
+from fastapi import BackgroundTasks
 
 
 @pytest.fixture
@@ -94,7 +94,9 @@ async def test_process_upload_validation_error(upload_service):
         await upload_service.process_upload(background_tasks, mock_file, "req-123")
 
 
-def test_process_in_background_success(upload_service, mock_processor_service, mock_session_factory):
+def test_process_in_background_success(
+    upload_service, mock_processor_service, mock_session_factory
+):
     """Test background processing calls processor and cleans up."""
     # Create a real temp file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz") as f:
@@ -108,7 +110,9 @@ def test_process_in_background_success(upload_service, mock_processor_service, m
     assert not os.path.exists(temp_path)
 
 
-def test_process_in_background_cleanup_on_error(upload_service, mock_processor_service, mock_session_factory):
+def test_process_in_background_cleanup_on_error(
+    upload_service, mock_processor_service, mock_session_factory
+):
     """Test background processing cleans up temp file even on failure."""
     mock_processor_service.process_archive.side_effect = Exception("Processing failed")
 

@@ -5,8 +5,8 @@ This module provides content service functionality by reading markdown/YAML file
 directly from the rules-content directory, matching the behavior of the Go-based
 insights-content-service but implemented in Python.
 """
+
 import logging
-from typing import Dict, Optional
 
 from app.content_parser_yaml import YAMLContentParser
 
@@ -29,7 +29,7 @@ class ContentService:
         :param parser: Content parser instance
         """
         self.parser = parser
-        self._content_index: Dict[tuple, Dict] = {}
+        self._content_index: dict[tuple, dict] = {}
         self._all_content: list = []
         self._load_content()
 
@@ -48,7 +48,7 @@ class ContentService:
 
         logger.info(f"Loaded {len(self._content_index)} rules into memory")
 
-    def get_content(self, rule_fqdn: str, error_key: str) -> Optional[Dict]:
+    def get_content(self, rule_fqdn: str, error_key: str) -> dict | None:
         """
         Get content for a specific rule and error key.
 

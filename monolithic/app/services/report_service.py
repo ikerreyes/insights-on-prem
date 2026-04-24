@@ -1,14 +1,14 @@
 """Service for report and rule hit business logic."""
+
 import json
 import logging
-from typing import Dict, List
 
 from sqlalchemy.orm import Session
 
 from app.models import Report, RuleHit
-from app.schemas import ReportV2, ReportMetaV2, RuleHitDetailedResponse
+from app.schemas import ReportMetaV2, ReportV2, RuleHitDetailedResponse
 from app.services.content_service import ContentService
-from app.utils.content import normalize_rule_fqdn, format_datetime_rfc3339
+from app.utils.content import format_datetime_rfc3339, normalize_rule_fqdn
 from app.utils.response_builder import ResponseBuilder
 
 logger = logging.getLogger(__name__)
@@ -37,11 +37,7 @@ class ReportService:
         logger.info(f"Fetching v2 report for cluster {cluster_id}")
 
         # Query the report for this cluster
-        report = (
-            db.query(Report)
-            .filter(Report.cluster == cluster_id)
-            .first()
-        )
+        report = db.query(Report).filter(Report.cluster == cluster_id).first()
 
         if not report:
             logger.warning(f"Report not found for cluster {cluster_id}")
@@ -64,11 +60,7 @@ class ReportService:
             insights_map[f"{component}|{key}"] = ir
 
         # Query rule hits for this cluster
-        rule_hits = (
-            db.query(RuleHit)
-            .filter(RuleHit.cluster_id == cluster_id)
-            .all()
-        )
+        rule_hits = db.query(RuleHit).filter(RuleHit.cluster_id == cluster_id).all()
 
         # Build detailed rule hits response
         rule_hits_detailed = self._build_rule_hits_v2(rule_hits, insights_map)
@@ -92,14 +84,15 @@ class ReportService:
         )
 
         logger.info(
-            f"Successfully fetched v2 report for cluster {cluster_id} with {len(rule_hits_detailed)} rule hits"
+            f"Successfully fetched v2 report for cluster {cluster_id} "
+            f"with {len(rule_hits_detailed)} rule hits"
         )
 
         return report_v2
 
     def _build_rule_hits_v2(
-        self, rule_hits: List[RuleHit], insights_map: Dict
-    ) -> List[RuleHitDetailedResponse]:
+        self, rule_hits: list[RuleHit], insights_map: dict
+    ) -> list[RuleHitDetailedResponse]:
         """
         Build v2 detailed rule hit responses.
 
@@ -114,7 +107,9 @@ class ReportService:
             rule_fqdn_for_content = normalize_rule_fqdn(hit.rule_fqdn)
 
             # Get content from content service
-            content_data = self.content_service.get_content(rule_fqdn_for_content, hit.error_key)
+            content_data = self.content_service.get_content(
+                rule_fqdn_for_content, hit.error_key
+            )
 
             if content_data:
                 # Get insights-core details for this rule hit

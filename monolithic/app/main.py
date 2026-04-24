@@ -1,33 +1,43 @@
 """FastAPI application for Insights On Premise."""
+
 import asyncio
 import logging
 import os
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from contextlib import asynccontextmanager
-from fastapi import BackgroundTasks, FastAPI, File, Request, UploadFile, Depends, HTTPException, Header
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.config_loader import load_config, load_insights_components
-from app.database import init_db, get_db
+from app.content_parser_yaml import YAMLContentParser
+from app.database import get_db, init_db
+from app.exceptions import ValidationError
 from app.schemas import (
-    UploadResponse,
-    ErrorResponse,
-    ReportResponseV2,
     BatchUpgradeRisksPredictionRequest,
     BatchUpgradeRisksPredictionResponse,
     ClusterPrediction,
+    ErrorResponse,
+    ReportResponseV2,
+    UploadResponse,
 )
-from app.content_parser_yaml import YAMLContentParser
-from app.services.report_service import ReportService
-from app.services.upload_service import UploadService
-from app.services.processor_service import ProcessorService
 from app.services.content_service import ContentService
+from app.services.processor_service import ProcessorService
+from app.services.report_service import ReportService
 from app.services.thanos_service import ThanosService
 from app.services.upgrade_prediction_service import UpgradePredictionService
-from app.exceptions import ValidationError
+from app.services.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +60,9 @@ async def lifespan(app: FastAPI):
     load_insights_components(config)
 
     app.state.processor_service = ProcessorService(config)
-    app.state.upload_service = UploadService(app.state.processor_service, config, session_factory)
+    app.state.upload_service = UploadService(
+        app.state.processor_service, config, session_factory
+    )
     app.state.content_service = ContentService(YAMLContentParser())
     app.state.report_service = ReportService(app.state.content_service)
     app.state.thanos_service = ThanosService(config)
@@ -65,7 +77,7 @@ app = FastAPI(
     title="Insights On-Premise",
     description="Red Hat Insights archive processing for on-premise deployment",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -98,8 +110,8 @@ async def health_check():
 async def upload_archive(
     request: Request,
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    x_rh_insights_request_id: str = Header(None, alias="x-rh-insights-request-id"),
+    file: UploadFile = File(...),  # noqa: B008
+    x_rh_insights_request_id: str = Header(None, alias="x-rh-insights-request-id"),  # noqa: B008
 ):
     """
     Upload and process Red Hat Insights archive.
@@ -122,14 +134,14 @@ async def upload_archive(
         raise HTTPException(
             status_code=400,
             detail=str(e),
-        )
+        ) from e
 
     except Exception as e:
         logger.error(f"Request {request_id}: Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Internal server error during upload processing",
-        )
+        ) from e
 
 
 @app.get(
@@ -146,7 +158,7 @@ async def upload_archive(
 async def get_cluster_report_v2(
     request: Request,
     cluster_id: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
 ):
     """
     Retrieve the latest report for a specific cluster (v2 endpoint).
@@ -173,7 +185,7 @@ async def get_cluster_report_v2(
         raise HTTPException(
             status_code=404,
             detail=str(e),
-        )
+        ) from e
 
     except Exception as e:
         logger.error(
@@ -182,7 +194,7 @@ async def get_cluster_report_v2(
         raise HTTPException(
             status_code=500,
             detail="Internal server error while fetching cluster report",
-        )
+        ) from e
 
 
 @app.post(
@@ -206,13 +218,18 @@ async def upgrade_risks_prediction_batch(
     :return: BatchUpgradeRisksPredictionResponse
     """
     thanos_service: ThanosService = request.app.state.thanos_service
-    prediction_service: UpgradePredictionService = request.app.state.upgrade_prediction_service
+    prediction_service: UpgradePredictionService = (
+        request.app.state.upgrade_prediction_service
+    )
 
-    MAX_BATCH_SIZE = 100
-    if len(body.clusters) > MAX_BATCH_SIZE:
+    max_batch_size = 100
+    if len(body.clusters) > max_batch_size:
         raise HTTPException(
             status_code=400,
-            detail=f"Batch size {len(body.clusters)} exceeds maximum of {MAX_BATCH_SIZE} clusters per request.",
+            detail=(
+                f"Batch size {len(body.clusters)} exceeds maximum of "
+                f"{max_batch_size} clusters per request."
+            ),
         )
     clusters = body.clusters
 
@@ -227,10 +244,14 @@ async def upgrade_risks_prediction_batch(
                 prediction_status="ok",
                 upgrade_recommended=result.upgrade_recommended,
                 upgrade_risks_predictors=result.upgrade_risks_predictors,
-                last_checked_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                last_checked_at=datetime.now(timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
             )
         except Exception:
-            logger.exception("Error predicting upgrade risks for cluster %s", cluster_id)
+            logger.exception(
+                "Error predicting upgrade risks for cluster %s", cluster_id
+            )
             return ClusterPrediction(
                 cluster_id=cluster_id,
                 prediction_status="No data for the cluster",

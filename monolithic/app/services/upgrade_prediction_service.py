@@ -1,13 +1,13 @@
 """Service for predicting upgrade risks based on cluster metrics."""
+
 import logging
-from typing import List
 from urllib.parse import urljoin
 
 from app.schemas import (
     AlertResponse,
     OperatorConditionResponse,
-    UpgradeRisksPredictors,
     UpgradeRisksPredictionResponse,
+    UpgradeRisksPredictors,
 )
 from app.services.thanos_service import Alert, OperatorCondition
 
@@ -65,7 +65,7 @@ class UpgradePredictionService:
         """
         Create an URL for each alert in the response.
 
-        :return: full URL leading to alert details 
+        :return: full URL leading to alert details
         """
         if not console_url or not alert_name:
             return ""
@@ -78,7 +78,7 @@ class UpgradePredictionService:
         """
         Create an URL for each failing operator condition in the response.
 
-        :return: full URL leading to FOC details 
+        :return: full URL leading to FOC details
         """
         if not console_url or not operator_name:
             return ""
@@ -89,13 +89,13 @@ class UpgradePredictionService:
 
     def predict(
         self,
-        alerts: List[Alert],
-        operator_conditions: List[OperatorCondition],
+        alerts: list[Alert],
+        operator_conditions: list[OperatorCondition],
         console_url: str,
     ) -> UpgradeRisksPredictionResponse:
         """
         Filter alerts and FOCs to identify actual upgrade risks.
-        
+
         :return: response object with prediction
         """
         filtered_alerts = [a for a in alerts if self._filter_alert(a)]

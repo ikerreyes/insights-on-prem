@@ -1,6 +1,8 @@
 """Pydantic schemas for API request/response validation."""
+
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -16,17 +18,17 @@ class ErrorResponse(BaseModel):
     """Response schema for errors."""
 
     error: str = Field(..., description="Error message")
-    request_id: Optional[str] = Field(None, description="Request ID if available")
-    detail: Optional[str] = Field(None, description="Additional error details")
+    request_id: str | None = Field(None, description="Request ID if available")
+    detail: str | None = Field(None, description="Additional error details")
 
 
 class AlertResponse(BaseModel):
     """Alert information from Thanos metrics."""
 
     name: str = Field(..., description="Alert name")
-    namespace: Optional[str] = Field(None, description="Alert namespace")
+    namespace: str | None = Field(None, description="Alert namespace")
     severity: str = Field(..., description="Alert severity")
-    url: Optional[str] = Field(None, description="Console URL for the alert")
+    url: str | None = Field(None, description="Console URL for the alert")
 
 
 class OperatorConditionResponse(BaseModel):
@@ -34,17 +36,20 @@ class OperatorConditionResponse(BaseModel):
 
     name: str = Field(..., description="Operator name")
     condition: str = Field(..., description="Condition type")
-    reason: Optional[str] = Field(None, description="Condition reason")
-    url: Optional[str] = Field(None, description="Console URL for the operator")
+    reason: str | None = Field(None, description="Condition reason")
+    url: str | None = Field(None, description="Console URL for the operator")
 
 
 class UpgradeRisksPredictors(BaseModel):
     """Predictors that indicate upgrade risks."""
 
-    alerts: List[AlertResponse] = Field(default_factory=list, description="Risky alerts")
-    operator_conditions: List[OperatorConditionResponse] = Field(
+    alerts: list[AlertResponse] = Field(
+        default_factory=list, description="Risky alerts"
+    )
+    operator_conditions: list[OperatorConditionResponse] = Field(
         default_factory=list, description="Failing operator conditions"
     )
+
 
 # Internal return type of UpgradePredictionService.predict().
 class UpgradeRisksPredictionResponse(BaseModel):
@@ -61,7 +66,7 @@ class UpgradeRisksPredictionResponse(BaseModel):
 class BatchUpgradeRisksPredictionRequest(BaseModel):
     """Request body matching console.redhat.com batch URP API."""
 
-    clusters: List[str] = Field(..., description="List of cluster UUIDs")
+    clusters: list[str] = Field(..., description="List of cluster UUIDs")
 
 
 class ClusterPrediction(BaseModel):
@@ -69,15 +74,15 @@ class ClusterPrediction(BaseModel):
 
     cluster_id: str
     prediction_status: str
-    upgrade_recommended: Optional[bool] = None
-    upgrade_risks_predictors: Optional[UpgradeRisksPredictors] = None
-    last_checked_at: Optional[str] = None
+    upgrade_recommended: bool | None = None
+    upgrade_risks_predictors: UpgradeRisksPredictors | None = None
+    last_checked_at: str | None = None
 
 
 class BatchUpgradeRisksPredictionResponse(BaseModel):
     """Response matching ccx-upgrades-data-eng MultiClusterUpgradeApiResponse."""
 
-    predictions: List[ClusterPrediction]
+    predictions: list[ClusterPrediction]
 
 
 # Schemas for v2 cluster report endpoint
@@ -87,29 +92,39 @@ class ReportMetaV2(BaseModel):
     cluster_name: str = Field(..., description="Cluster UUID or name")
     managed: bool = Field(default=False, description="Whether cluster is managed")
     count: int = Field(..., description="Number of rules that hit")
-    last_checked_at: Optional[str] = Field(None, description="Last check timestamp (RFC3339)")
-    gathered_at: Optional[str] = Field(None, description="Data gathering timestamp (RFC3339)")
+    last_checked_at: str | None = Field(
+        None, description="Last check timestamp (RFC3339)"
+    )
+    gathered_at: str | None = Field(
+        None, description="Data gathering timestamp (RFC3339)"
+    )
 
 
 class RuleHitDetailedResponse(BaseModel):
     """Detailed rule hit response for v2 report (matching smart-proxy format)."""
 
     rule_id: str = Field(..., description="Rule module/FQDN")
-    created_at: Optional[str] = Field(None, description="When rule was created (RFC3339)")
+    created_at: str | None = Field(None, description="When rule was created (RFC3339)")
     description: str = Field(default="", description="Rule description")
-    details: str = Field(default="", alias="generic", description="Generic/detailed information")
+    details: str = Field(
+        default="", alias="generic", description="Generic/detailed information"
+    )
     reason: str = Field(default="", description="Reason for the rule hit")
     resolution: str = Field(default="", description="Resolution steps")
     more_info: str = Field(default="", description="Additional information URL")
     total_risk: int = Field(default=1, description="Total risk level (1-4)")
     disabled: bool = Field(default=False, description="Whether rule is disabled")
     disable_feedback: str = Field(default="", description="Feedback for disabled rule")
-    disabled_at: Optional[str] = Field(default="", description="When rule was disabled")
+    disabled_at: str | None = Field(default="", description="When rule was disabled")
     internal: bool = Field(default=False, description="Whether rule is internal")
     user_vote: int = Field(default=0, description="User vote (-1, 0, 1)")
-    extra_data: Dict[str, Any] = Field(default_factory=dict, description="Additional template data")
-    tags: List[str] = Field(default_factory=list, description="Rule tags")
-    impacted: Optional[str] = Field(None, description="When cluster was impacted (RFC3339)")
+    extra_data: dict[str, Any] = Field(
+        default_factory=dict, description="Additional template data"
+    )
+    tags: list[str] = Field(default_factory=list, description="Rule tags")
+    impacted: str | None = Field(
+        None, description="When cluster was impacted (RFC3339)"
+    )
 
     class Config:
         populate_by_name = True  # Allow both 'details' and 'generic' field names
@@ -119,7 +134,9 @@ class ReportV2(BaseModel):
     """Report data structure for v2 endpoint."""
 
     meta: ReportMetaV2 = Field(..., description="Report metadata")
-    data: List[RuleHitDetailedResponse] = Field(default_factory=list, description="List of rule hits")
+    data: list[RuleHitDetailedResponse] = Field(
+        default_factory=list, description="List of rule hits"
+    )
 
 
 class ReportResponseV2(BaseModel):

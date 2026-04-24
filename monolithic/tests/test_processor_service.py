@@ -1,13 +1,13 @@
 """Tests for processor service."""
-import json
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime
 
+import json
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 from app.config import AppConfig
-from app.services.processor_service import ProcessorService
-from app.models import Report, RuleHit
 from app.exceptions import ProcessingError
+from app.models import Report, RuleHit
+from app.services.processor_service import ProcessorService
 
 
 @pytest.fixture
@@ -33,7 +33,9 @@ def test_init_with_valid_config(service_config, tmp_path):
     service = ProcessorService(service_config)
 
     assert service.extract_timeout_seconds == 300
-    assert service.extract_tmp_dir == str(tmp_path)  # sourced from config.temp_upload_dir
+    assert service.extract_tmp_dir == str(
+        tmp_path
+    )  # sourced from config.temp_upload_dir
     assert service.unpacked_archive_size_limit == -1
 
 
@@ -83,29 +85,35 @@ def test_get_cluster_id_missing_id_file(processor_service, tmp_path):
 def test_extract_rule_hits_valid_json(processor_service):
     """Test extracting rule hits from valid JSON."""
     # Code expects reports as a list of dicts with "type", "component", "key" fields
-    results_json = json.dumps({
-        "reports": [
-            {
-                "component": "ccx_rules_ocp.external.rules.example_rule.report",
-                "key": "ERROR_KEY_1",
-                "type": "rule",
-                "details": {}
-            },
-            {
-                "component": "ccx_rules_ocp.external.rules.another_rule.report",
-                "key": "ERROR_KEY_2",
-                "type": "rule",
-                "details": {}
-            }
-        ]
-    })
+    results_json = json.dumps(
+        {
+            "reports": [
+                {
+                    "component": "ccx_rules_ocp.external.rules.example_rule.report",
+                    "key": "ERROR_KEY_1",
+                    "type": "rule",
+                    "details": {},
+                },
+                {
+                    "component": "ccx_rules_ocp.external.rules.another_rule.report",
+                    "key": "ERROR_KEY_2",
+                    "type": "rule",
+                    "details": {},
+                },
+            ]
+        }
+    )
 
     rule_hits = processor_service.extract_rule_hits(results_json)
 
     assert len(rule_hits) == 2
-    assert rule_hits[0]["rule_fqdn"] == "ccx_rules_ocp.external.rules.example_rule.report"
+    assert (
+        rule_hits[0]["rule_fqdn"] == "ccx_rules_ocp.external.rules.example_rule.report"
+    )
     assert rule_hits[0]["error_key"] == "ERROR_KEY_1"
-    assert rule_hits[1]["rule_fqdn"] == "ccx_rules_ocp.external.rules.another_rule.report"
+    assert (
+        rule_hits[1]["rule_fqdn"] == "ccx_rules_ocp.external.rules.another_rule.report"
+    )
     assert rule_hits[1]["error_key"] == "ERROR_KEY_2"
 
 
@@ -131,21 +139,18 @@ def _make_results_json(rules):
     """Helper to build results JSON in the format expected by extract_rule_hits."""
     reports = []
     for rule_fqdn, error_key in rules:
-        reports.append({
-            "component": rule_fqdn,
-            "key": error_key,
-            "type": "rule",
-            "details": {}
-        })
+        reports.append(
+            {"component": rule_fqdn, "key": error_key, "type": "rule", "details": {}}
+        )
     return json.dumps({"reports": reports})
 
 
 def test_save_results_success(processor_service, database):
     """Test successful save of results."""
     cluster_id = "test-cluster-123"
-    results_json = _make_results_json([
-        ("ccx_rules_ocp.external.rules.example.report", "ERROR_KEY")
-    ])
+    results_json = _make_results_json(
+        [("ccx_rules_ocp.external.rules.example.report", "ERROR_KEY")]
+    )
 
     count = processor_service.save_results(database, cluster_id, results_json)
 
@@ -165,14 +170,16 @@ def test_save_results_success(processor_service, database):
 def test_save_results_transaction_rollback_on_error(processor_service, database):
     """Test transaction rollback when save fails."""
     cluster_id = "test-cluster-123"
-    results_json = _make_results_json([
-        ("ccx_rules_ocp.external.rules.example.report", "ERROR_KEY")
-    ])
+    results_json = _make_results_json(
+        [("ccx_rules_ocp.external.rules.example.report", "ERROR_KEY")]
+    )
 
     # Mock RuleHit.upsert to raise an error
-    with patch.object(RuleHit, 'upsert', side_effect=Exception("Database error")):
-        with pytest.raises(ProcessingError, match="Database save failed"):
-            processor_service.save_results(database, cluster_id, results_json)
+    with (
+        patch.object(RuleHit, "upsert", side_effect=Exception("Database error")),
+        pytest.raises(ProcessingError, match="Database save failed"),
+    ):
+        processor_service.save_results(database, cluster_id, results_json)
 
     # Verify nothing was committed
     report = database.query(Report).filter_by(cluster=cluster_id).first()
@@ -224,16 +231,11 @@ def test_save_results_empty_rule_hits(processor_service, database):
     assert len(rule_hits) == 0
 
 
-@patch('app.services.processor_service.extract')
-@patch('app.services.processor_service.initialize_broker')
-@patch('app.services.processor_service.dr')
+@patch("app.services.processor_service.extract")
+@patch("app.services.processor_service.initialize_broker")
+@patch("app.services.processor_service.dr")
 def test_process_archive_success(
-    mock_dr,
-    mock_init_broker,
-    mock_extract,
-    processor_service,
-    database,
-    tmp_path
+    mock_dr, mock_init_broker, mock_extract, processor_service, database, tmp_path
 ):
     """Test successful archive processing."""
     # Setup mocks
@@ -257,18 +259,20 @@ def test_process_archive_success(
     mock_formatter = MagicMock()
     processor_service.Formatter = mock_formatter
 
-    with patch('app.services.processor_service.StringIO') as mock_stringio:
+    with patch("app.services.processor_service.StringIO") as mock_stringio:
         mock_output = MagicMock()
         mock_output.read.return_value = test_results
         mock_stringio.return_value = mock_output
 
-        cluster_id, count = processor_service.process_archive(database, "/fake/archive.tar.gz")
+        cluster_id, count = processor_service.process_archive(
+            database, "/fake/archive.tar.gz"
+        )
 
     assert cluster_id == "test-cluster-123"
     assert count == 1
 
 
-@patch('app.services.processor_service.extract')
+@patch("app.services.processor_service.extract")
 def test_process_archive_extraction_fails(mock_extract, processor_service, database):
     """Test archive processing when extraction fails."""
     mock_extract.side_effect = Exception("Extraction failed")
@@ -277,7 +281,7 @@ def test_process_archive_extraction_fails(mock_extract, processor_service, datab
         processor_service.process_archive(database, "/fake/archive.tar.gz")
 
 
-@patch('app.services.processor_service.extract')
+@patch("app.services.processor_service.extract")
 def test_process_archive_size_limit_exceeded(mock_extract, service_config, tmp_path):
     """Test archive processing when size limit is exceeded."""
     service_config.unpacked_archive_size_limit = 100
@@ -287,6 +291,8 @@ def test_process_archive_size_limit_exceeded(mock_extract, service_config, tmp_p
     mock_extraction.tmp_dir = str(tmp_path / "extraction")
     mock_extract.return_value.__enter__.return_value = mock_extraction
 
-    with patch.object(service, '_validate_size', return_value=False):
-        with pytest.raises(ProcessingError, match="Archive exceeds size limit"):
-            service.process_archive(Mock(), "/fake/archive.tar.gz")
+    with (
+        patch.object(service, "_validate_size", return_value=False),
+        pytest.raises(ProcessingError, match="Archive exceeds size limit"),
+    ):
+        service.process_archive(Mock(), "/fake/archive.tar.gz")

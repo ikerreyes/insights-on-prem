@@ -1,8 +1,8 @@
 """Configuration loader."""
+
 import logging
 import logging.config
 import os
-from typing import Dict
 
 import yaml
 from insights import apply_configs, apply_default_enabled, dr
@@ -25,11 +25,11 @@ def load_config(config_path: str = "config.yml") -> AppConfig:
         raise ProcessingError(f"Configuration file not found: {config_path}")
 
     try:
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             raw = yaml.safe_load(f) or {}
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
-        raise ProcessingError(f"Configuration loading failed: {str(e)}")
+        raise ProcessingError(f"Configuration loading failed: {str(e)}") from e
 
     plugins = raw.get("plugins", {})
     config = AppConfig(
@@ -60,7 +60,9 @@ def load_insights_components(config: AppConfig) -> None:
             dr.load_components(package, continue_on_error=False)
         except Exception as e:
             logger.error(f"Failed to load package {package}: {e}")
-            raise ProcessingError(f"Failed to load required package '{package}': {str(e)}")
+            raise ProcessingError(
+                f"Failed to load required package '{package}': {str(e)}"
+            ) from e
 
     plugins = {"packages": config.plugin_packages, "configs": config.plugin_configs}
     apply_default_enabled(plugins)

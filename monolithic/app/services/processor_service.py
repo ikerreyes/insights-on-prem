@@ -1,22 +1,21 @@
 """Insights-core archive processing service."""
+
 import json
 import logging
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
-from typing import Dict, List, Tuple
-
-from sqlalchemy.orm import Session
 
 # Insights-core imports
 from insights import dr
 from insights.core.archives import extract
 from insights.core.hydration import initialize_broker
 from insights.formats.text import HumanReadableFormat
+from sqlalchemy.orm import Session
 
 from app.config import AppConfig
-from app.models import Report, RuleHit
 from app.exceptions import ProcessingError
+from app.models import Report, RuleHit
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +57,7 @@ class ProcessorService:
             f"Processor initialized with {len(self.target_components)} components"
         )
 
-    def _get_component_graphs(self, target_components: List[str]) -> Dict:
+    def _get_component_graphs(self, target_components: list[str]) -> dict:
         """
         Get dependency graphs for target components.
 
@@ -90,7 +89,8 @@ class ProcessorService:
 
         if total_size >= self.unpacked_archive_size_limit:
             logger.warning(
-                f"Unpacked archive exceeds limit: {total_size} >= {self.unpacked_archive_size_limit}"
+                f"Unpacked archive exceeds limit: {total_size} >= "
+                f"{self.unpacked_archive_size_limit}"
             )
             return False
 
@@ -110,18 +110,20 @@ class ProcessorService:
         id_file_path = os.path.join(extraction_path, "config", "id")
         if os.path.exists(id_file_path):
             try:
-                with open(id_file_path, "r") as f:
+                with open(id_file_path) as f:
                     cluster_id = f.read().strip()
                     if cluster_id:
                         logger.info(f"Found cluster_id in config/id: {cluster_id}")
                         return cluster_id
             except Exception as e:
                 logger.error(f"Failed to read config/id: {e}")
-                raise ProcessingError(f"Failed to read config/id: {str(e)}")
+                raise ProcessingError(f"Failed to read config/id: {str(e)}") from e
 
-        raise ProcessingError("Could not find cluster ID. Missing config/id file in archive.")
+        raise ProcessingError(
+            "Could not find cluster ID. Missing config/id file in archive."
+        )
 
-    def process_with_insights_core(self, archive_path: str) -> Tuple[str, str]:
+    def process_with_insights_core(self, archive_path: str) -> tuple[str, str]:
         """
         Process archive with insights-core.
 
@@ -168,9 +170,9 @@ class ProcessorService:
 
         except Exception as e:
             logger.error(f"insights-core processing failed: {e}", exc_info=True)
-            raise ProcessingError(f"Analysis failed: {str(e)}")
+            raise ProcessingError(f"Analysis failed: {str(e)}") from e
 
-    def extract_rule_hits(self, results_json: str) -> List[Dict]:
+    def extract_rule_hits(self, results_json: str) -> list[dict]:
         """
         Extract rule hits from insights-core results.
 
@@ -195,11 +197,13 @@ class ProcessorService:
                     details = report.get("details", {})
 
                     if rule_fqdn:
-                        rule_hits.append({
-                            "rule_fqdn": rule_fqdn,
-                            "error_key": error_key,
-                            "details": details,
-                        })
+                        rule_hits.append(
+                            {
+                                "rule_fqdn": rule_fqdn,
+                                "error_key": error_key,
+                                "details": details,
+                            }
+                        )
 
             logger.info(f"Extracted {len(rule_hits)} rule hits")
 
@@ -264,10 +268,12 @@ class ProcessorService:
         except Exception as e:
             # Rollback on any error
             db.rollback()
-            logger.error(f"Failed to save results for cluster {cluster_id}: {e}", exc_info=True)
-            raise ProcessingError(f"Database save failed: {str(e)}")
+            logger.error(
+                f"Failed to save results for cluster {cluster_id}: {e}", exc_info=True
+            )
+            raise ProcessingError(f"Database save failed: {str(e)}") from e
 
-    def process_archive(self, db: Session, archive_path: str) -> Tuple[str, int]:
+    def process_archive(self, db: Session, archive_path: str) -> tuple[str, int]:
         """
         Main processing function - extract, analyze, and save archive.
 

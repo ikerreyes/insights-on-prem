@@ -59,7 +59,7 @@ MCO (MultiCluster Observability) is required for upgrade risk predictions and mu
 
 ## Quick Start
 
-In Cluster Bot: 
+In Cluster Bot:
 ```bash
 launch 4.20 aws,large
 ```
@@ -605,4 +605,3 @@ oc delete clusterrolebinding identity-injector-cluster-reader
 oc delete namespace edp-processing
 oc delete namespace kafka
 ```
-
