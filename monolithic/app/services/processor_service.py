@@ -257,14 +257,16 @@ class ProcessorService:
                 )
 
             # Save simplified report for on-demand request tracking
-            if request_id:
-                simplified_report = json.dumps(rule_hits)
-                RequestReport.create(
-                    db,
-                    request_id=request_id,
-                    cluster_id=cluster_id,
-                    report=simplified_report,
-                )
+            if not request_id:
+                logger.error(f"Missing request_id for cluster {cluster_id}")
+                raise ProcessingError("request_id is required but was not provided")
+            simplified_report = json.dumps(rule_hits)
+            RequestReport.create(
+                db,
+                request_id=request_id,
+                cluster_id=cluster_id,
+                report=simplified_report,
+            )
 
             # Commit the transaction
             db.commit()
