@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
+from typing import Tuple
 
 # Insights-core imports
 from insights import dr
@@ -279,13 +280,9 @@ class ProcessorService:
             )
             raise ProcessingError(f"Database save failed: {str(e)}") from e
 
-<<<<<<< HEAD
-    def process_archive(self, db: Session, archive_path: str) -> tuple[str, int]:
-=======
     def process_archive(
         self, db: Session, archive_path: str, request_id: str,
     ) -> Tuple[str, int]:
->>>>>>> c51e9ad (Add on demand data gathering endpoints)
         """
         Main processing function - extract, analyze, and save archive.
 

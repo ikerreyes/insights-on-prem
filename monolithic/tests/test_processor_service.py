@@ -181,7 +181,7 @@ def test_save_results_transaction_rollback_on_error(processor_service, database)
         patch.object(RuleHit, "upsert", side_effect=Exception("Database error")),
         pytest.raises(ProcessingError, match="Database save failed"),
     ):
-        processor_service.save_results(database, cluster_id, results_json)
+        processor_service.save_results(database, cluster_id, results_json, REQUEST_ID)
 
     # Verify nothing was committed
     report = database.query(Report).filter_by(cluster=cluster_id).first()
@@ -283,7 +283,7 @@ def test_process_archive_success(
         mock_stringio.return_value = mock_output
 
         cluster_id, count = processor_service.process_archive(
-            database, "/fake/archive.tar.gz"
+            database, "/fake/archive.tar.gz", REQUEST_ID 
         )
 
     assert cluster_id == "test-cluster-123"
@@ -313,4 +313,4 @@ def test_process_archive_size_limit_exceeded(mock_extract, service_config, tmp_p
         patch.object(service, "_validate_size", return_value=False),
         pytest.raises(ProcessingError, match="Archive exceeds size limit"),
     ):
-        service.process_archive(Mock(), "/fake/archive.tar.gz")
+        service.process_archive(Mock(), "/fake/archive.tar.gz", REQUEST_ID)
