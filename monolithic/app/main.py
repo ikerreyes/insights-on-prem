@@ -13,7 +13,6 @@ from fastapi import (
     Depends,
     FastAPI,
     File,
-    Header,
     HTTPException,
     Request,
     UploadFile,
@@ -151,21 +150,18 @@ async def upload_archive(
     response: Response,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),  # noqa: B008
-    x_rh_insights_request_id: str = Header(None, alias="x-rh-insights-request-id"),  # noqa: B008
 ):
     """
     Upload and process Red Hat Insights archive.
 
     :param file: Uploaded archive file (tar, tar.gz, or tgz format)
     :param background_tasks: FastAPI background tasks
-    :param x_rh_insights_request_id: Optional request ID header
     :return: UploadResponse with accepted status
     :raises HTTPException: On validation errors
     """
     upload_service: UploadService = request.app.state.upload_service
 
-    # Generate or use provided request ID
-    request_id = x_rh_insights_request_id or str(uuid.uuid4())
+    request_id = str(uuid.uuid4())
 
     try:
         upload_response = await upload_service.process_upload(background_tasks, file, request_id)
