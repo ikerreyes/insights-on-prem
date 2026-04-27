@@ -165,7 +165,7 @@ class SimplifiedRuleHit(BaseModel):
 
     rule_fqdn: str = Field(..., description="Fully qualified rule name")
     error_key: str = Field(..., description="Error key for the rule")
-    description: str = Field(default="", description="Rule description")
+    description: str = Field(..., description="Rule description")
     total_risk: int = Field(default=0, description="Total risk level (1-4)")
 
 
