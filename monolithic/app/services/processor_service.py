@@ -245,8 +245,8 @@ class ProcessorService:
                 gathered_at=datetime.now(timezone.utc),
             )
 
-            # Upsert new rule hits (preserves impacted_since for existing ones)
-            new_keys = set()
+            # Replace all rule hits for this cluster atomically
+            RuleHit.delete_for_cluster(db, cluster_id)
             for hit in rule_hits:
                 RuleHit.upsert(
                     db,
@@ -254,13 +254,6 @@ class ProcessorService:
                     rule_fqdn=hit["rule_fqdn"],
                     error_key=hit["error_key"],
                 )
-                new_keys.add((hit["rule_fqdn"], hit["error_key"]))
-
-            # Remove rule hits that are no longer firing
-            existing_hits = db.query(RuleHit).filter_by(cluster_id=cluster_id).all()
-            for existing in existing_hits:
-                if (existing.rule_fqdn, existing.error_key) not in new_keys:
-                    db.delete(existing)
 
             # Save simplified report for on-demand request tracking
             if request_id:
