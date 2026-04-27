@@ -10,6 +10,7 @@ from app.models import RequestReport
 client = TestClient(app)
 
 REQUEST_ID = "00000000-0000-0000-0000-000000000000"
+OLD_REQUEST_ID = "11111111-1111-1111-1111-111111111111"
 CLUSTER_ID = "00000000-0000-0000-0000-000000000001"
 
 
@@ -117,9 +118,6 @@ def test_request_report_returns_simplified_report(database):
     for i, exp in enumerate(expected):
         for key, value in exp.items():
             assert data["report"][i][key] == value
-
-
-OLD_REQUEST_ID = "11111111-1111-1111-1111-111111111111"
 
 
 def test_cleanup_removes_old_request_reports(database):
