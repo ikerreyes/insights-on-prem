@@ -1,5 +1,6 @@
 """Tests for on-demand gathering endpoints."""
 import json
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -116,3 +117,42 @@ def test_request_report_returns_simplified_report(database):
     for i, exp in enumerate(expected):
         for key, value in exp.items():
             assert data["report"][i][key] == value
+
+
+OLD_REQUEST_ID = "11111111-1111-1111-1111-111111111111"
+
+
+def test_cleanup_removes_old_request_reports(database):
+    """Test that delete_older_than removes expired reports and leaves recent ones."""
+    old_record = RequestReport(
+        request_id=OLD_REQUEST_ID,
+        cluster_id=CLUSTER_ID,
+        report="[]",
+        created_at=datetime.now(timezone.utc) - timedelta(hours=48),
+    )
+    recent_record = RequestReport(
+        request_id=REQUEST_ID,
+        cluster_id=CLUSTER_ID,
+        report="[]",
+        created_at=datetime.now(timezone.utc),
+    )
+    database.add_all([old_record, recent_record])
+    database.commit()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    deleted = RequestReport.delete_older_than(database, cutoff)
+    database.commit()
+
+    assert deleted == 1
+
+    # Old report is gone — status endpoint returns 404
+    response = client.get(
+        f"/api/v2/cluster/{CLUSTER_ID}/request/{OLD_REQUEST_ID}/status"
+    )
+    assert response.status_code == 404
+
+    # Recent report still accessible
+    response = client.get(
+        f"/api/v2/cluster/{CLUSTER_ID}/request/{REQUEST_ID}/status"
+    )
+    assert response.status_code == 200

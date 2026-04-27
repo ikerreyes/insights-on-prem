@@ -215,6 +215,22 @@ def test_save_results_replaces_old_rule_hits(processor_service, database):
     assert new_hits[0].error_key == "NEW_KEY"
 
 
+def test_save_results_upserts_report_on_reprocessing(processor_service, database):
+    """Test that reprocessing a cluster updates the existing report, not duplicates it."""
+    cluster_id = "test-cluster-123"
+    first_results = _make_results_json([("rule_a", "ERR_A")])
+    second_results = _make_results_json([("rule_b", "ERR_B")])
+
+    processor_service.save_results(database, cluster_id, first_results, REQUEST_ID)
+    processor_service.save_results(database, cluster_id, second_results, "second-request")
+
+    reports = database.query(Report).filter_by(cluster=cluster_id).all()
+    assert len(reports) == 1
+
+    report_data = json.loads(reports[0].report)
+    assert report_data["results"] == second_results
+
+
 def test_save_results_empty_rule_hits(processor_service, database):
     """Test saving results with no rule hits."""
     cluster_id = "test-cluster-123"
