@@ -43,8 +43,6 @@ from app.services.report_service import ReportService
 from app.services.thanos_service import ThanosService
 from app.services.upgrade_prediction_service import UpgradePredictionService
 from app.services.upload_service import UploadService
-from app.utils.content import normalize_rule_fqdn
-
 logger = logging.getLogger(__name__)
 
 
@@ -371,7 +369,7 @@ async def get_request_report(
         rule_hits_raw = json.loads(record.report)
         rule_hits = []
         for hit in rule_hits_raw:
-            rule_fqdn = normalize_rule_fqdn(hit.get("rule_fqdn", ""))
+            rule_fqdn = hit.get("rule_fqdn", "")
             error_key = hit.get("error_key", "")
             content = content_service.get_content(rule_fqdn, error_key)
             if not content:

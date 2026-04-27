@@ -78,9 +78,9 @@ def test_request_report_returns_simplified_report(database):
         {"rule_fqdn": "ccx_rules_ocp.external.rules.unknown", "error_key": "ERR3"},
     ]
 
-    # Build stored report — rule_fqdn has .report suffix as stored by processor
+    # Build stored report — rule_fqdn is normalized at write time by save_results
     rule_hits = [
-        {"rule_fqdn": r["rule_fqdn"] + ".report", "error_key": r["error_key"], "details": {}}
+        {"rule_fqdn": r["rule_fqdn"], "error_key": r["error_key"], "details": {}}
         for r in test_rules
     ]
     RequestReport.create(

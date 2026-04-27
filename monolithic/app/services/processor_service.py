@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.config import AppConfig
 from app.exceptions import ProcessingError
 from app.models import Report, RequestReport, RuleHit
+from app.utils.content import normalize_rule_fqdn
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +261,10 @@ class ProcessorService:
             if not request_id:
                 logger.error(f"Missing request_id for cluster {cluster_id}")
                 raise ProcessingError("request_id is required but was not provided")
-            simplified_report = json.dumps(rule_hits)
+            simplified_report = json.dumps([
+                {**hit, "rule_fqdn": normalize_rule_fqdn(hit["rule_fqdn"])}
+                for hit in rule_hits
+            ])
             RequestReport.create(
                 db,
                 request_id=request_id,
