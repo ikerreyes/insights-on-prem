@@ -258,9 +258,6 @@ class ProcessorService:
                 )
 
             # Save simplified report for on-demand request tracking
-            if not request_id:
-                logger.error(f"Missing request_id for cluster {cluster_id}")
-                raise ProcessingError("request_id is required but was not provided")
             simplified_report = json.dumps([
                 {**hit, "rule_fqdn": normalize_rule_fqdn(hit["rule_fqdn"])}
                 for hit in rule_hits
