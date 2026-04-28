@@ -1,5 +1,6 @@
 """Tests for on-demand gathering endpoints."""
 import json
+import pytest
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
@@ -12,14 +13,6 @@ client = TestClient(app)
 REQUEST_ID = "00000000-0000-0000-0000-000000000000"
 OLD_REQUEST_ID = "11111111-1111-1111-1111-111111111111"
 CLUSTER_ID = "00000000-0000-0000-0000-000000000001"
-
-
-def test_request_status_not_found(database):
-    """Test status endpoint returns 404 for unknown request."""
-    response = client.get(
-        f"/api/v2/cluster/{CLUSTER_ID}/request/nonexistent/status"
-    )
-    assert response.status_code == 404
 
 
 def test_request_status_processed(database):
@@ -58,11 +51,13 @@ def test_request_status_wrong_cluster(database):
     assert response.status_code == 404
 
 
-def test_request_report_not_found(database):
+@pytest.mark.parametrize("endpoint", [
+    f"/api/v2/cluster/{CLUSTER_ID}/request/nonexistent/report",
+    f"/api/v2/cluster/{CLUSTER_ID}/request/nonexistent/status",
+])
+def test_not_found(endpoint, database):
     """Test report endpoint returns 404 for unknown request."""
-    response = client.get(
-        f"/api/v2/cluster/{CLUSTER_ID}/request/nonexistent/report"
-    )
+    response = client.get(endpoint)
     assert response.status_code == 404
 
 
