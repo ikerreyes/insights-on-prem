@@ -1,9 +1,10 @@
 """Tests for on-demand gathering endpoints."""
 import json
 import pytest
-from datetime import datetime, timedelta, timezone
 
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
+from unittest.mock import MagicMock
 
 from app.main import app
 from app.models import RequestReport
@@ -63,7 +64,6 @@ def test_not_found(endpoint, database):
 
 def test_request_report_returns_simplified_report(database):
     """Test report endpoint enriches rule hits with content (description, total_risk)."""
-    from unittest.mock import MagicMock
 
     # Rules with description/total_risk have content,
     # rules without them simulate missing content (skipped in response)
