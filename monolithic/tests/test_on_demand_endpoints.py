@@ -36,32 +36,6 @@ def test_request_status_processed(database):
     assert data["status"] == "processed"
 
 
-def test_request_status_wrong_cluster(database):
-    """Test status endpoint returns 404 when cluster_id doesn't match."""
-    RequestReport.create(
-        db=database,
-        request_id=REQUEST_ID,
-        cluster_id=CLUSTER_ID,
-        report="[]",
-    )
-    database.commit()
-
-    response = client.get(
-        f"/api/v2/cluster/wrong-cluster/request/{REQUEST_ID}/status"
-    )
-    assert response.status_code == 404
-
-
-@pytest.mark.parametrize("endpoint", [
-    f"/api/v2/cluster/{CLUSTER_ID}/request/nonexistent/report",
-    f"/api/v2/cluster/{CLUSTER_ID}/request/nonexistent/status",
-])
-def test_not_found(endpoint, database):
-    """Test report endpoint returns 404 for unknown request."""
-    response = client.get(endpoint)
-    assert response.status_code == 404
-
-
 def test_request_report_returns_simplified_report(database):
     """Test report endpoint enriches rule hits with content (description, total_risk)."""
 
@@ -113,6 +87,27 @@ def test_request_report_returns_simplified_report(database):
     for i, exp in enumerate(expected):
         for key, value in exp.items():
             assert data["report"][i][key] == value
+
+
+@pytest.mark.parametrize("endpoint", [
+    f"/api/v2/cluster/{CLUSTER_ID}/request/nonexistent/report",
+    f"/api/v2/cluster/{CLUSTER_ID}/request/nonexistent/status",
+    f"/api/v2/cluster/nonexistent/request/{REQUEST_ID}/report"
+    f"/api/v2/cluster/nonexistent/request/{REQUEST_ID}/status",
+
+])
+def test_not_found(endpoint, database):
+    """Test report/status endpoint returns 404 for unknown cluster ID (or request ID)."""
+    RequestReport.create(
+        db=database,
+        request_id=REQUEST_ID,
+        cluster_id=CLUSTER_ID,
+        report="[]",
+    )
+    database.commit()
+
+    response = client.get(endpoint)
+    assert response.status_code == 404
 
 
 def test_cleanup_removes_old_request_reports(database):
