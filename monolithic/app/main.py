@@ -363,22 +363,23 @@ async def get_request_report(
 
     try:
         rule_hits_raw = json.loads(record.report)
-        rule_hits = []
-        for hit in rule_hits_raw:
-            rule_fqdn = hit.get("rule_fqdn", "")
-            error_key = hit.get("error_key", "")
-            content = content_service.get_content(rule_fqdn, error_key)
-            if not content:
-                logger.warning(f"Content not found for rule {rule_fqdn} error_key {error_key}, skipping")
-                continue
-            rule_hits.append(SimplifiedRuleHit(
-                rule_fqdn=rule_fqdn,
-                error_key=error_key,
-                description=content.get("description", ""),
-                total_risk=content.get("total_risk", 0),
-            ))
     except (json.JSONDecodeError, TypeError):
-        rule_hits = []
+        rule_hits_raw = []
+
+    rule_hits = []
+    for hit in rule_hits_raw:
+        rule_fqdn = hit.get("rule_fqdn", "")
+        error_key = hit.get("error_key", "")
+        content = content_service.get_content(rule_fqdn, error_key)
+        if not content:
+            logger.warning(f"Content not found for rule {rule_fqdn} error_key {error_key}, skipping")
+            continue
+        rule_hits.append(SimplifiedRuleHit(
+            rule_fqdn=rule_fqdn,
+            error_key=error_key,
+            description=content.get("description", ""),
+            total_risk=content.get("total_risk", 0),
+        ))
 
     return RequestReportResponse(
         cluster=cluster_id,
