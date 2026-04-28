@@ -1,0 +1,146 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: install-acm
+spec:
+  description: |
+    Installs ACM (Advanced Cluster Management) on the target cluster via OLM.
+    Creates the operator subscription, waits for the CSV, then creates a
+    MultiClusterHub and waits for it to reach Running state.
+  params:
+    - name: kubeconfigSecretRef
+      type: string
+      description: Name of the Secret containing the kubeconfig for the target cluster
+  steps:
+    - name: install-acm
+      image: registry.redhat.io/openshift4/ose-cli:latest
+      env:
+        - name: KUBECONFIG_VALUE
+          valueFrom:
+            secretKeyRef:
+              name: $(params.kubeconfigSecretRef)
+              key: kubeconfig
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        KUBECONFIG="$(mktemp)"
+        trap 'rm -f "$KUBECONFIG"' EXIT
+        echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
+        export KUBECONFIG
+
+        echo "--- Cluster info ---"
+        oc cluster-info
+
+        ACM_NS="ocm"
+        oc create namespace "$ACM_NS"
+
+        oc apply -f - <<EOF
+        apiVersion: operators.coreos.com/v1
+        kind: OperatorGroup
+        metadata:
+          name: acm-operator-group
+          namespace: $ACM_NS
+        spec:
+          targetNamespaces:
+            - $ACM_NS
+        EOF
+
+        echo "Waiting for ACM packagemanifest..."
+        CHANNEL=""
+        for i in $(seq 1 30); do
+          CHANNEL=$(oc get packagemanifest advanced-cluster-management \
+            -o jsonpath='{.status.defaultChannel}' 2>/dev/null || echo "")
+          if [[ -n "$CHANNEL" ]]; then
+            break
+          fi
+          echo "  Attempt $i: packagemanifest not ready yet..."
+          sleep 10
+        done
+
+        if [[ -z "$CHANNEL" ]]; then
+          echo "ERROR: Could not find ACM packagemanifest"
+          oc get packagemanifest | grep -i cluster-management || true
+          exit 1
+        fi
+        echo "Using ACM channel: $CHANNEL"
+
+        oc apply -f - <<EOF
+        apiVersion: operators.coreos.com/v1alpha1
+        kind: Subscription
+        metadata:
+          name: acm-operator-subscription
+          namespace: $ACM_NS
+        spec:
+          sourceNamespace: openshift-marketplace
+          source: redhat-operators
+          channel: $CHANNEL
+          installPlanApproval: Automatic
+          name: advanced-cluster-management
+        EOF
+
+        echo "Waiting for ACM operator CSV to succeed..."
+        PHASE=""
+        for i in $(seq 1 60); do
+          CSV=$(oc get subscription acm-operator-subscription -n "$ACM_NS" \
+            -o jsonpath='{.status.installedCSV}' 2>/dev/null || echo "")
+          if [[ -n "$CSV" ]]; then
+            PHASE=$(oc get csv "$CSV" -n "$ACM_NS" \
+              -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            if [[ "$PHASE" == "Succeeded" ]]; then
+              echo "ACM operator CSV $CSV is ready"
+              break
+            fi
+            echo "  Attempt $i: CSV $CSV phase=$PHASE"
+          else
+            echo "  Attempt $i: no CSV yet..."
+          fi
+          sleep 15
+        done
+
+        if [[ "$PHASE" != "Succeeded" ]]; then
+          echo "ERROR: ACM operator CSV did not reach Succeeded state"
+          oc get csv -n "$ACM_NS"
+          exit 1
+        fi
+
+        oc get secret pull-secret -n openshift-config \
+          -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > /tmp/ps.json
+        oc create secret generic multiclusterhub-operator-pull-secret \
+          -n "$ACM_NS" \
+          --from-file=.dockerconfigjson=/tmp/ps.json \
+          --type=kubernetes.io/dockerconfigjson
+        rm -f /tmp/ps.json
+
+        oc apply -f - <<EOF
+        apiVersion: operator.ocm.io/v1
+        kind: MultiClusterHub
+        metadata:
+          name: multiclusterhub
+          namespace: $ACM_NS
+        spec:
+          availabilityConfig: Basic
+          imagePullSecret: multiclusterhub-operator-pull-secret
+          overrides:
+            components:
+              - name: search
+                enabled: false
+              - name: cluster-backup
+                enabled: false
+              - name: console
+                enabled: false
+        EOF
+
+        echo "Waiting for MultiClusterHub to reach Running state (this may take 15-25 minutes)..."
+        oc wait --for=jsonpath='{.status.phase}'=Running \
+          mch/multiclusterhub -n "$ACM_NS" --timeout=30m
+
+        ACM_VERSION=$(oc get mch multiclusterhub -n "$ACM_NS" \
+          -o jsonpath='{.status.currentVersion}')
+        echo "ACM $ACM_VERSION is Running"
+
+        echo "Waiting for local-cluster ManagedCluster..."
+        oc wait --for=condition=ManagedClusterConditionAvailable \
+          managedcluster/local-cluster --timeout=10m
+        echo "local-cluster is available"

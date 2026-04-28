@@ -1,0 +1,53 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: run-smoke-test
+spec:
+  description: |
+    Clones the source repo at the SNAPSHOT commit and runs the integration
+    smoke tests against the deployed service on the target cluster.
+  params:
+    - name: kubeconfigSecretRef
+      type: string
+      description: Name of the Secret containing the kubeconfig for the target cluster
+    - name: SNAPSHOT
+      type: string
+      description: The JSON string of the Snapshot under test
+    - name: namespace
+      type: string
+      description: Namespace where the service is deployed
+  steps:
+    - name: run-smoke-test
+      image: quay.io/ccxdev/insights-on-prem-tests:latest
+      env:
+        - name: KUBECONFIG_VALUE
+          valueFrom:
+            secretKeyRef:
+              name: $(params.kubeconfigSecretRef)
+              key: kubeconfig
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: NAMESPACE
+          value: $(params.namespace)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        KUBECONFIG="$(mktemp)"
+        trap 'rm -f "$KUBECONFIG"' EXIT
+        echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
+        export KUBECONFIG
+
+        COMMIT_SHA=$(echo "$SNAPSHOT" | jq -r \
+          '.components[] | select(.name == "insights-on-prem") | .source.git.revision')
+        echo "Running smoke tests from commit: $COMMIT_SHA"
+
+        git init /tmp/repo
+        cd /tmp/repo
+        git remote add origin https://github.com/RedHatInsights/insights-on-prem.git
+        git fetch --depth=1 origin "$COMMIT_SHA"
+        git checkout FETCH_HEAD
+
+        export NAMESPACE
+        pytest tests/integration/test_smoke.py -v --junitxml=/tmp/smoke-test-results.xml

@@ -1,0 +1,131 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: insights-on-prem-smoke-test-pipeline
+spec:
+  description: |
+    Smoke test pipeline for insights-on-prem. Claims a cluster from the obs pool,
+    installs ACM, deploys the service image from SNAPSHOT, and verifies the pod
+    is running.
+
+    NOTE: The install-acm, deploy-service, and run-smoke-test tasks are resolved
+    from the "master" branch via git resolver. Changes to those task files are NOT
+    tested from PRs — they take effect only after merging. See TODO.md for options.
+  params:
+    - name: SNAPSHOT
+      description: The JSON string of the Snapshot under test
+      type: string
+    - name: test-name
+      description: The name of the test
+      default: insights-on-prem-smoke-test
+    - name: ocp-version
+      description: OCP version for the ephemeral cluster
+      default: "4.22"
+    - name: namespace
+      description: Namespace to deploy insights-on-prem into
+      default: insights-on-prem
+  tasks:
+    - name: provision-ephemeral-cluster
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/openshift/konflux-tasks
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/provision-ephemeral-cluster/0.1/provision-ephemeral-cluster.yaml
+      params:
+        - name: ownerName
+          value: $(context.pipelineRun.name)
+        - name: ownerUid
+          value: $(context.pipelineRun.uid)
+        - name: workflow
+          value: generic-claim
+        - name: clusterClaim
+          value: |
+            {
+              "architecture": "amd64",
+              "cloud": "aws",
+              "labels": {
+                "region": "us-east-1"
+              },
+              "owner": "obs",
+              "product": "ocp",
+              "timeout": "2h0m0s",
+              "version": "$(params.ocp-version)"
+            }
+
+    - name: install-acm
+      runAfter:
+        - provision-ephemeral-cluster
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/ikerreyes/insights-on-prem
+          - name: revision
+            value: konflux-pr-test
+          - name: pathInRepo
+            value: ci/test-pipelines/tasks/install-acm.yaml
+      params:
+        - name: kubeconfigSecretRef
+          value: $(tasks.provision-ephemeral-cluster.results.secretRef)
+
+    - name: deploy-service
+      runAfter:
+        - install-acm
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/ikerreyes/insights-on-prem
+          - name: revision
+            value: konflux-pr-test
+          - name: pathInRepo
+            value: ci/test-pipelines/tasks/deploy-service.yaml
+      params:
+        - name: kubeconfigSecretRef
+          value: $(tasks.provision-ephemeral-cluster.results.secretRef)
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: namespace
+          value: $(params.namespace)
+
+    - name: run-smoke-test
+      runAfter:
+        - deploy-service
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/ikerreyes/insights-on-prem
+          - name: revision
+            value: konflux-pr-test
+          - name: pathInRepo
+            value: ci/test-pipelines/tasks/run-smoke-test.yaml
+      params:
+        - name: kubeconfigSecretRef
+          value: $(tasks.provision-ephemeral-cluster.results.secretRef)
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: namespace
+          value: $(params.namespace)
+
+  finally:
+    - name: deprovision-ephemeral-cluster
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/openshift/konflux-tasks
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/deprovision-ephemeral-cluster/0.1/deprovision-ephemeral-cluster.yaml
+      params:
+        - name: testPlatformClusterClaimName
+          value: $(tasks.provision-ephemeral-cluster.results.testPlatformClusterClaimName)
+        - name: testPlatformClusterClaimNamespace
+          value: $(tasks.provision-ephemeral-cluster.results.testPlatformClusterClaimNamespace)
