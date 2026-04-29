@@ -5,7 +5,6 @@ import logging
 from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
-from typing import Tuple
 
 # Insights-core imports
 from insights import dr
@@ -217,7 +216,11 @@ class ProcessorService:
         return rule_hits
 
     def save_results(
-        self, db: Session, cluster_id: str, results_json: str, request_id: str,
+        self,
+        db: Session,
+        cluster_id: str,
+        results_json: str,
+        request_id: str,
     ) -> int:
         """
         Save processing results to database.
@@ -258,10 +261,12 @@ class ProcessorService:
                 )
 
             # Save simplified report for on-demand request tracking
-            simplified_report = json.dumps([
-                {**hit, "rule_fqdn": normalize_rule_fqdn(hit["rule_fqdn"])}
-                for hit in rule_hits
-            ])
+            simplified_report = json.dumps(
+                [
+                    {**hit, "rule_fqdn": normalize_rule_fqdn(hit["rule_fqdn"])}
+                    for hit in rule_hits
+                ]
+            )
             RequestReport.create(
                 db,
                 request_id=request_id,
@@ -284,8 +289,11 @@ class ProcessorService:
             raise ProcessingError(f"Database save failed: {str(e)}") from e
 
     def process_archive(
-        self, db: Session, archive_path: str, request_id: str,
-    ) -> Tuple[str, int]:
+        self,
+        db: Session,
+        archive_path: str,
+        request_id: str,
+    ) -> tuple[str, int]:
         """
         Main processing function - extract, analyze, and save archive.
 

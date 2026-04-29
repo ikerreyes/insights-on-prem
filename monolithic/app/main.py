@@ -1,6 +1,7 @@
 """FastAPI application for Insights On Premise."""
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -31,8 +32,8 @@ from app.schemas import (
     ClusterPrediction,
     ErrorResponse,
     ReportResponseV2,
-    RequestStatusResponse,
     RequestReportResponse,
+    RequestStatusResponse,
     SimplifiedRuleHit,
     UploadResponse,
 )
@@ -42,6 +43,7 @@ from app.services.report_service import ReportService
 from app.services.thanos_service import ThanosService
 from app.services.upgrade_prediction_service import UpgradePredictionService
 from app.services.upload_service import UploadService
+
 logger = logging.getLogger(__name__)
 
 
@@ -81,10 +83,8 @@ async def lifespan(app: FastAPI):
 
     # Cancel cleanup task on shutdown
     cleanup_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await cleanup_task
-    except asyncio.CancelledError:
-        pass
 
 
 async def _cleanup_old_request_reports(session_factory, config):
@@ -164,7 +164,9 @@ async def upload_archive(
     request_id = str(uuid.uuid4())
 
     try:
-        upload_response = await upload_service.process_upload(background_tasks, file, request_id)
+        upload_response = await upload_service.process_upload(
+            background_tasks, file, request_id
+        )
         response.headers["x-rh-insights-request-id"] = request_id
         return upload_response
 
@@ -310,7 +312,7 @@ async def upgrade_risks_prediction_batch(
 async def get_request_status(
     cluster_id: str,
     request_id: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
 ):
     """
     Check the processing status of an on-demand data gathering request.
@@ -343,7 +345,7 @@ async def get_request_report(
     request: Request,
     cluster_id: str,
     request_id: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
 ):
     """
     Retrieve the simplified report for an on-demand data gathering request.
@@ -372,14 +374,18 @@ async def get_request_report(
         error_key = hit.get("error_key", "")
         content = content_service.get_content(rule_fqdn, error_key)
         if not content:
-            logger.warning(f"Content not found for rule {rule_fqdn} error_key {error_key}, skipping")
+            logger.warning(
+                f"Content not found for rule {rule_fqdn} error_key {error_key}, skipping"
+            )
             continue
-        rule_hits.append(SimplifiedRuleHit(
-            rule_fqdn=rule_fqdn,
-            error_key=error_key,
-            description=content.get("description", ""),
-            total_risk=content.get("total_risk", 0),
-        ))
+        rule_hits.append(
+            SimplifiedRuleHit(
+                rule_fqdn=rule_fqdn,
+                error_key=error_key,
+                description=content.get("description", ""),
+                total_risk=content.get("total_risk", 0),
+            )
+        )
 
     return RequestReportResponse(
         cluster=cluster_id,

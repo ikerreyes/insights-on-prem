@@ -174,9 +174,7 @@ class RequestReport(Base):
     report = Column(VARCHAR, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False)
 
-    __table_args__ = (
-        Index("idx_request_report_created_at", "created_at"),
-    )
+    __table_args__ = (Index("idx_request_report_created_at", "created_at"),)
 
     @classmethod
     def create(
@@ -234,8 +232,4 @@ class RequestReport(Base):
         :param cutoff: Delete records created before this time
         :return: Number of rows deleted
         """
-        return (
-            db.query(cls)
-            .filter(cls.created_at < cutoff)
-            .delete()
-        )
+        return db.query(cls).filter(cls.created_at < cutoff).delete()

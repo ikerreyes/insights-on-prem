@@ -154,7 +154,9 @@ def test_save_results_success(processor_service, database):
         [("ccx_rules_ocp.external.rules.example.report", "ERROR_KEY")]
     )
 
-    count = processor_service.save_results(database, cluster_id, results_json, REQUEST_ID)
+    count = processor_service.save_results(
+        database, cluster_id, results_json, REQUEST_ID
+    )
 
     assert count == 1
 
@@ -222,7 +224,9 @@ def test_save_results_upserts_report_on_reprocessing(processor_service, database
     second_results = _make_results_json([("rule_b", "ERR_B")])
 
     processor_service.save_results(database, cluster_id, first_results, REQUEST_ID)
-    processor_service.save_results(database, cluster_id, second_results, "second-request")
+    processor_service.save_results(
+        database, cluster_id, second_results, "second-request"
+    )
 
     reports = database.query(Report).filter_by(cluster=cluster_id).all()
     assert len(reports) == 1
@@ -236,7 +240,9 @@ def test_save_results_empty_rule_hits(processor_service, database):
     cluster_id = "test-cluster-123"
     results_json = json.dumps({"reports": []})
 
-    count = processor_service.save_results(database, cluster_id, results_json, REQUEST_ID)
+    count = processor_service.save_results(
+        database, cluster_id, results_json, REQUEST_ID
+    )
 
     assert count == 0
 
@@ -283,7 +289,7 @@ def test_process_archive_success(
         mock_stringio.return_value = mock_output
 
         cluster_id, count = processor_service.process_archive(
-            database, "/fake/archive.tar.gz", REQUEST_ID 
+            database, "/fake/archive.tar.gz", REQUEST_ID
         )
 
     assert cluster_id == "test-cluster-123"

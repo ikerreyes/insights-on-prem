@@ -62,7 +62,10 @@ _ENV_OVERRIDES = {
     "THANOS_QUERY_TIMEOUT_SECONDS": ("thanos_query_timeout_seconds", int),
     "THANOS_QUERY_LOOKBACK_MINUTES": ("thanos_query_lookback_minutes", int),
     "REQUEST_REPORT_RETENTION_HOURS": ("request_report_retention_hours", int),
-    "REQUEST_REPORT_CLEANUP_INTERVAL_MINUTES": ("request_report_cleanup_interval_minutes", int),
+    "REQUEST_REPORT_CLEANUP_INTERVAL_MINUTES": (
+        "request_report_cleanup_interval_minutes",
+        int,
+    ),
 }
 
 

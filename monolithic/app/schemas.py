@@ -1,7 +1,7 @@
 """Pydantic schemas for API request/response validation."""
 
 from datetime import datetime
-from typing import Any, List
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -148,6 +148,7 @@ class ReportResponseV2(BaseModel):
 
 # Schemas for on-demand data gathering request status/report endpoints
 
+
 class RequestStatusResponse(BaseModel):
     """Response schema for request processing status endpoint.
 
@@ -156,7 +157,7 @@ class RequestStatusResponse(BaseModel):
     """
 
     cluster: str = Field(..., description="Cluster UUID")
-    requestID: str = Field(..., description="Request identifier")
+    requestID: str = Field(..., description="Request identifier")  # noqa: N815
     status: str = Field(default="processed", description="Processing status")
 
 
@@ -176,8 +177,8 @@ class RequestReportResponse(BaseModel):
     """
 
     cluster: str = Field(..., description="Cluster UUID")
-    requestID: str = Field(..., description="Request identifier")
+    requestID: str = Field(..., description="Request identifier")  # noqa: N815
     status: str = Field(default="processed", description="Processing status")
-    report: List[SimplifiedRuleHit] = Field(
+    report: list[SimplifiedRuleHit] = Field(
         default_factory=list, description="List of rule hits"
     )
