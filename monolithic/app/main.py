@@ -90,7 +90,6 @@ async def lifespan(app: FastAPI):
 async def _cleanup_old_request_reports(session_factory, config):
     """Periodically delete old request report records."""
     while True:
-        await asyncio.sleep(config.request_report_cleanup_interval_minutes * 60)
         db = session_factory()
         try:
             cutoff = datetime.now(timezone.utc) - timedelta(
@@ -108,6 +107,9 @@ async def _cleanup_old_request_reports(session_factory, config):
                 logger.error(f"Rollback also failed: {rollback_err}")
         finally:
             db.close()
+
+        # Wait for configured time until next cleanup
+        await asyncio.sleep(config.request_report_cleanup_interval_minutes * 60)
 
 
 # Create FastAPI app
