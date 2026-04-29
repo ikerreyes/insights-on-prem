@@ -9,9 +9,13 @@ spec:
     installs ACM, deploys the service image from SNAPSHOT, and verifies the pod
     is running.
 
-    NOTE: The install-acm, deploy-service, and run-smoke-test tasks are resolved
-    from the "master" branch via git resolver. Changes to those task files are NOT
-    tested from PRs — they take effect only after merging. See TODO.md for options.
+    IMPORTANT: The install-acm, deploy-service, and run-smoke-test tasks are
+    resolved from a fixed branch (currently "konflux-pr-test", will be changed
+    to "master" once validated). This means changes to task files in
+    ci/test-pipelines/tasks/ are NOT tested from PRs — they only take effect
+    after merging to the target branch. To test task changes before merging,
+    temporarily update the "revision" field in the corresponding taskRef to
+    point to your working branch, verify, then revert before merging.
   params:
     - name: SNAPSHOT
       description: The JSON string of the Snapshot under test
@@ -21,7 +25,7 @@ spec:
       default: insights-on-prem-smoke-test
     - name: ocp-version
       description: OCP version for the ephemeral cluster
-      default: "4.22"
+      default: "4.21"
     - name: namespace
       description: Namespace to deploy insights-on-prem into
       default: insights-on-prem
@@ -49,7 +53,7 @@ spec:
               "architecture": "amd64",
               "cloud": "aws",
               "labels": {
-                "region": "us-east-1"
+                "region": "us-east-2"
               },
               "owner": "obs",
               "product": "ocp",
