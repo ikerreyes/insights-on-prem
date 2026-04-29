@@ -93,15 +93,22 @@ def test_request_report_returns_simplified_report(database):
 
     assert response.status_code == 200
     data = response.json()
+
     assert data["cluster"] == CLUSTER_ID
     assert data["requestID"] == REQUEST_ID
     assert data["status"] == "processed"
+
+    # Check individual rule reports
     # Rules without content are skipped (matches smart-proxy behavior)
-    expected = [r for r in test_rules if "description" in r]
-    assert len(data["report"]) == len(expected)
-    for i, exp in enumerate(expected):
-        for key, value in exp.items():
-            assert data["report"][i][key] == value
+    expected_reports = [r for r in test_rules if "description" in r]
+    assert len(data["report"]) == len(expected_reports)
+    report_by_ek = {r["error_key"]: r for r in data["report"]}
+    for expected_report in expected_reports:
+        assert expected_report["error_key"] in report_by_ek
+        actual_report = report_by_ek[expected_report["error_key"]]
+        assert len(actual_report.items()) == 4
+        for key, value in expected_report.items():
+            assert actual_report[key] == value
 
 
 @pytest.mark.parametrize(
