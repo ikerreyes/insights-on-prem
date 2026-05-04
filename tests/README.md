@@ -73,8 +73,6 @@ The smoke test pipeline (`ci/test-pipelines/insights-on-prem-smoke-test-pipeline
 
 The IntegrationTestScenario is currently set to **optional** (advisory, not blocking).
 
-**Note on task changes:** The pipeline references tasks in `ci/test-pipelines/tasks/` via git resolver with a fixed branch revision (currently `konflux-pr-test`, will be `master` once validated). This means changes to task files are **not tested from PRs** — they only take effect after merging. To test task changes before merging, temporarily update the `revision` field in the corresponding `taskRef` to point to your working branch, verify the pipeline works, then revert before merging.
-
 ## Adding Dependencies
 
 - **Python packages:** Add to `requirements.txt`, the image will be rebuilt on next merge.
