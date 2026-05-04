@@ -8,8 +8,8 @@ spec:
     Smoke test pipeline for insights-on-prem. Claims a cluster from the obs pool,
     installs ACM, deploys the service image from SNAPSHOT, and verifies the pod
     is running.
-  timeouts:
-    pipeline: "3h"
+  # timeouts:
+  #   pipeline: "3h"
   params:
     - name: SNAPSHOT
       description: The JSON string of the Snapshot under test
