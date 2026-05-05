@@ -5,30 +5,57 @@ metadata:
   name: insights-on-prem-smoke-test-pipeline
 spec:
   description: |
-    Incremental validation test: trivial inline task + install-acm inline task.
-    No provision/deprovision -- testing whether install-acm passes Konflux validation.
+    Smoke test pipeline for insights-on-prem. Claims a cluster from the obs pool,
+    installs ACM, deploys the service image from SNAPSHOT, and verifies the pod
+    is running.
   params:
     - name: SNAPSHOT
       description: The JSON string of the Snapshot under test
       type: string
+    - name: test-name
+      description: The name of the test
+      default: insights-on-prem-smoke-test
+    - name: ocp-version
+      description: OCP version for the ephemeral cluster
+      default: "4.21"
     - name: namespace
       description: Namespace to deploy insights-on-prem into
       default: insights-on-prem
   tasks:
-    - name: inline-test
-      taskSpec:
-        steps:
-          - name: hello
-            image: registry.access.redhat.com/ubi9-minimal:latest
-            script: |
-              #!/bin/sh
-              echo "Inline taskSpec works!"
-              date
-              echo "Done."
+    - name: provision-ephemeral-cluster
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/openshift/konflux-tasks
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/provision-ephemeral-cluster/0.1/provision-ephemeral-cluster.yaml
+      params:
+        - name: ownerName
+          value: $(context.pipelineRun.name)
+        - name: ownerUid
+          value: $(context.pipelineRun.uid)
+        - name: workflow
+          value: generic-claim
+        - name: clusterClaim
+          value: |
+            {
+              "architecture": "amd64",
+              "cloud": "aws",
+              "labels": {
+                "region": "us-east-2"
+              },
+              "owner": "obs",
+              "product": "ocp",
+              "timeout": "2h0m0s",
+              "version": "$(params.ocp-version)"
+            }
 
     - name: install-acm
       runAfter:
-        - inline-test
+        - provision-ephemeral-cluster
       taskSpec:
         params:
           - name: kubeconfigSecretRef
@@ -168,4 +195,157 @@ spec:
               echo "local-cluster is available"
       params:
         - name: kubeconfigSecretRef
-          value: dummy-secret-for-validation-test
+          value: $(tasks.provision-ephemeral-cluster.results.secretRef)
+
+    - name: deploy-service
+      runAfter:
+        - install-acm
+      taskSpec:
+        params:
+          - name: kubeconfigSecretRef
+            type: string
+            description: Name of the Secret containing the kubeconfig for the target cluster
+          - name: SNAPSHOT
+            type: string
+            description: The JSON string of the Snapshot under test
+          - name: namespace
+            type: string
+            description: Namespace to deploy the service into
+        steps:
+          - name: deploy-service
+            image: registry.redhat.io/openshift4/ose-cli:latest
+            env:
+              - name: KUBECONFIG_VALUE
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.kubeconfigSecretRef)
+                    key: kubeconfig
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+              - name: NAMESPACE
+                value: $(params.namespace)
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+
+              KUBECONFIG="$$(mktemp)"
+              trap 'rm -f "$KUBECONFIG"' EXIT
+              echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
+              export KUBECONFIG
+
+              SERVICE_IMAGE=$$(echo "$SNAPSHOT" | jq -r \
+                '.components[] | select(.name == "insights-on-prem") | .containerImage')
+              echo "Deploying service image: $SERVICE_IMAGE"
+
+              oc create namespace "$NAMESPACE"
+
+              # TODO: Replace with add-on deployment once the add-on controller is ready.
+              # For now, deploy as a simple Deployment to validate the image starts.
+              oc apply -f - <<EOF
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: insights-on-prem
+                namespace: $NAMESPACE
+                labels:
+                  app: insights-on-prem
+              spec:
+                replicas: 1
+                selector:
+                  matchLabels:
+                    app: insights-on-prem
+                template:
+                  metadata:
+                    labels:
+                      app: insights-on-prem
+                  spec:
+                    containers:
+                      - name: insights-on-prem
+                        image: $SERVICE_IMAGE
+                        ports:
+                          - containerPort: 8080
+              EOF
+
+              echo "Waiting for deployment rollout..."
+              oc rollout status deployment/insights-on-prem -n "$NAMESPACE" --timeout=300s
+              echo "Service deployed successfully"
+      params:
+        - name: kubeconfigSecretRef
+          value: $(tasks.provision-ephemeral-cluster.results.secretRef)
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: namespace
+          value: $(params.namespace)
+
+    - name: run-smoke-test
+      runAfter:
+        - deploy-service
+      taskSpec:
+        params:
+          - name: kubeconfigSecretRef
+            type: string
+            description: Name of the Secret containing the kubeconfig for the target cluster
+          - name: SNAPSHOT
+            type: string
+            description: The JSON string of the Snapshot under test
+          - name: namespace
+            type: string
+            description: Namespace where the service is deployed
+        steps:
+          - name: run-smoke-test
+            image: quay.io/ccxdev/insights-on-prem-tests:latest
+            env:
+              - name: KUBECONFIG_VALUE
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.kubeconfigSecretRef)
+                    key: kubeconfig
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+              - name: NAMESPACE
+                value: $(params.namespace)
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+
+              KUBECONFIG="$$(mktemp)"
+              trap 'rm -f "$KUBECONFIG"' EXIT
+              echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
+              export KUBECONFIG
+
+              COMMIT_SHA=$$(echo "$SNAPSHOT" | jq -r \
+                '.components[] | select(.name == "insights-on-prem") | .source.git.revision')
+              echo "Running smoke tests from commit: $COMMIT_SHA"
+
+              git init /tmp/repo
+              cd /tmp/repo
+              git remote add origin https://github.com/RedHatInsights/insights-on-prem.git
+              git fetch --depth=1 origin "$COMMIT_SHA"
+              git checkout FETCH_HEAD
+
+              export NAMESPACE
+              pytest tests/integration/test_smoke.py -v --junitxml=/tmp/smoke-test-results.xml
+      params:
+        - name: kubeconfigSecretRef
+          value: $(tasks.provision-ephemeral-cluster.results.secretRef)
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: namespace
+          value: $(params.namespace)
+
+  finally:
+    - name: deprovision-ephemeral-cluster
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/openshift/konflux-tasks
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/deprovision-ephemeral-cluster/0.1/deprovision-ephemeral-cluster.yaml
+      params:
+        - name: testPlatformClusterClaimName
+          value: $(tasks.provision-ephemeral-cluster.results.testPlatformClusterClaimName)
+        - name: testPlatformClusterClaimNamespace
+          value: $(tasks.provision-ephemeral-cluster.results.testPlatformClusterClaimNamespace)
