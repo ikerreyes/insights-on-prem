@@ -65,14 +65,37 @@ spec:
           - name: install-acm
             image: registry.redhat.io/openshift4/ose-cli:latest
             env:
-              - name: KUBECONFIG_VALUE
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.kubeconfigSecretRef)
-                    key: kubeconfig
+              - name: SECRET_NAME
+                value: $(params.kubeconfigSecretRef)
             script: |
               #!/usr/bin/env bash
               set -euo pipefail
+
+              # Read kubeconfig at runtime instead of via secretKeyRef env var.
+              # The Crossplane connection secret may not be populated yet when the
+              # pod starts — ClusterReady can be set before the kubeconfig is written.
+              echo "Waiting for kubeconfig in secret $SECRET_NAME..."
+              KUBECONFIG_VALUE=""
+              for i in $$(seq 1 30); do
+                KUBECONFIG_VALUE=$$(oc get secret "$SECRET_NAME" \
+                  -o jsonpath='{.data.kubeconfig}' 2>/dev/null || echo "")
+                if [[ -n "$KUBECONFIG_VALUE" ]]; then
+                  KUBECONFIG_VALUE=$$(echo "$KUBECONFIG_VALUE" | base64 -d)
+                  echo "Kubeconfig retrieved from secret"
+                  break
+                fi
+                echo "  Attempt $i: kubeconfig key not found, listing secret keys..."
+                oc get secret "$SECRET_NAME" -o jsonpath='{.data}' 2>/dev/null | head -c 200 || true
+                echo ""
+                sleep 10
+              done
+
+              if [[ -z "$KUBECONFIG_VALUE" ]]; then
+                echo "ERROR: kubeconfig not found in secret $SECRET_NAME after 5 minutes"
+                echo "Secret contents:"
+                oc describe secret "$SECRET_NAME" || true
+                exit 1
+              fi
 
               KUBECONFIG="$$(mktemp)"
               trap 'rm -f "$KUBECONFIG"' EXIT
@@ -215,11 +238,8 @@ spec:
           - name: deploy-service
             image: registry.redhat.io/openshift4/ose-cli:latest
             env:
-              - name: KUBECONFIG_VALUE
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.kubeconfigSecretRef)
-                    key: kubeconfig
+              - name: SECRET_NAME
+                value: $(params.kubeconfigSecretRef)
               - name: SNAPSHOT
                 value: $(params.SNAPSHOT)
               - name: NAMESPACE
@@ -228,6 +248,8 @@ spec:
               #!/usr/bin/env bash
               set -euo pipefail
 
+              KUBECONFIG_VALUE=$$(oc get secret "$SECRET_NAME" \
+                -o jsonpath='{.data.kubeconfig}' | base64 -d)
               KUBECONFIG="$$(mktemp)"
               trap 'rm -f "$KUBECONFIG"' EXIT
               echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
@@ -239,8 +261,6 @@ spec:
 
               oc create namespace "$NAMESPACE"
 
-              # TODO: Replace with add-on deployment once the add-on controller is ready.
-              # For now, deploy as a simple Deployment to validate the image starts.
               oc apply -f - <<EOF
               apiVersion: apps/v1
               kind: Deployment
@@ -295,11 +315,8 @@ spec:
           - name: run-smoke-test
             image: quay.io/ccxdev/insights-on-prem-tests:latest
             env:
-              - name: KUBECONFIG_VALUE
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.kubeconfigSecretRef)
-                    key: kubeconfig
+              - name: SECRET_NAME
+                value: $(params.kubeconfigSecretRef)
               - name: SNAPSHOT
                 value: $(params.SNAPSHOT)
               - name: NAMESPACE
@@ -308,6 +325,8 @@ spec:
               #!/usr/bin/env bash
               set -euo pipefail
 
+              KUBECONFIG_VALUE=$$(oc get secret "$SECRET_NAME" \
+                -o jsonpath='{.data.kubeconfig}' | base64 -d)
               KUBECONFIG="$$(mktemp)"
               trap 'rm -f "$KUBECONFIG"' EXIT
               echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
