@@ -5,81 +5,20 @@ metadata:
   name: insights-on-prem-smoke-test-pipeline
 spec:
   description: |
-    Smoke test pipeline for insights-on-prem. Claims a cluster from the obs pool,
-    installs ACM, deploys the service image from SNAPSHOT, and verifies the pod
-    is running.
-  # timeouts:
-  #   pipeline: "3h"
+    Minimal pipeline to test whether inline taskSpec passes Konflux validation.
+    Temporarily stripped of provision/deprovision to isolate the test.
   params:
     - name: SNAPSHOT
       description: The JSON string of the Snapshot under test
       type: string
-    - name: test-name
-      description: The name of the test
-      default: insights-on-prem-smoke-test
-    - name: ocp-version
-      description: OCP version for the ephemeral cluster
-      default: "4.21"
-    - name: namespace
-      description: Namespace to deploy insights-on-prem into
-      default: insights-on-prem
   tasks:
-    - name: provision-ephemeral-cluster
-      taskRef:
-        resolver: git
-        params:
-          - name: url
-            value: https://github.com/openshift/konflux-tasks
-          - name: revision
-            value: main
-          - name: pathInRepo
-            value: tasks/provision-ephemeral-cluster/0.1/provision-ephemeral-cluster.yaml
-      params:
-        - name: ownerName
-          value: $(context.pipelineRun.name)
-        - name: ownerUid
-          value: $(context.pipelineRun.uid)
-        - name: workflow
-          value: generic-claim
-        - name: clusterClaim
-          value: |
-            {
-              "architecture": "amd64",
-              "cloud": "aws",
-              "labels": {
-                "region": "us-east-2"
-              },
-              "owner": "obs",
-              "product": "ocp",
-              "timeout": "2h0m0s",
-              "version": "$(params.ocp-version)"
-            }
-
     - name: inline-test
-      runAfter:
-        - provision-ephemeral-cluster
       taskSpec:
         steps:
           - name: hello
-            image: alpine:latest
+            image: registry.access.redhat.com/ubi9-minimal:latest
             script: |
               #!/bin/sh
               echo "Inline taskSpec works!"
-              echo "Provision completed, cluster is ready."
-
-  finally:
-    - name: deprovision-ephemeral-cluster
-      taskRef:
-        resolver: git
-        params:
-          - name: url
-            value: https://github.com/openshift/konflux-tasks
-          - name: revision
-            value: main
-          - name: pathInRepo
-            value: tasks/deprovision-ephemeral-cluster/0.1/deprovision-ephemeral-cluster.yaml
-      params:
-        - name: testPlatformClusterClaimName
-          value: $(tasks.provision-ephemeral-cluster.results.testPlatformClusterClaimName)
-        - name: testPlatformClusterClaimNamespace
-          value: $(tasks.provision-ephemeral-cluster.results.testPlatformClusterClaimNamespace)
+              date
+              echo "Done."
