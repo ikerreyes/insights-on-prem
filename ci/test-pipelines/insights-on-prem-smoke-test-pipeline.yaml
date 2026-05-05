@@ -76,11 +76,11 @@ spec:
               # pod starts — ClusterReady can be set before the kubeconfig is written.
               echo "Waiting for kubeconfig in secret $SECRET_NAME..."
               KUBECONFIG_VALUE=""
-              for i in $$(seq 1 30); do
-                KUBECONFIG_VALUE=$$(oc get secret "$SECRET_NAME" \
+              for i in $(seq 1 30); do
+                KUBECONFIG_VALUE=$(oc get secret "$SECRET_NAME" \
                   -o jsonpath='{.data.kubeconfig}' 2>/dev/null || echo "")
                 if [[ -n "$KUBECONFIG_VALUE" ]]; then
-                  KUBECONFIG_VALUE=$$(echo "$KUBECONFIG_VALUE" | base64 -d)
+                  KUBECONFIG_VALUE=$(echo "$KUBECONFIG_VALUE" | base64 -d)
                   echo "Kubeconfig retrieved from secret"
                   break
                 fi
@@ -97,7 +97,7 @@ spec:
                 exit 1
               fi
 
-              KUBECONFIG="$$(mktemp)"
+              KUBECONFIG="$(mktemp)"
               trap 'rm -f "$KUBECONFIG"' EXIT
               echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
               export KUBECONFIG
@@ -121,8 +121,8 @@ spec:
 
               echo "Waiting for ACM packagemanifest..."
               CHANNEL=""
-              for i in $$(seq 1 30); do
-                CHANNEL=$$(oc get packagemanifest advanced-cluster-management \
+              for i in $(seq 1 30); do
+                CHANNEL=$(oc get packagemanifest advanced-cluster-management \
                   -o jsonpath='{.status.defaultChannel}' 2>/dev/null || echo "")
                 if [[ -n "$CHANNEL" ]]; then
                   break
@@ -154,11 +154,11 @@ spec:
 
               echo "Waiting for ACM operator CSV to succeed..."
               PHASE=""
-              for i in $$(seq 1 60); do
-                CSV=$$(oc get subscription acm-operator-subscription -n "$ACM_NS" \
+              for i in $(seq 1 60); do
+                CSV=$(oc get subscription acm-operator-subscription -n "$ACM_NS" \
                   -o jsonpath='{.status.installedCSV}' 2>/dev/null || echo "")
                 if [[ -n "$CSV" ]]; then
-                  PHASE=$$(oc get csv "$CSV" -n "$ACM_NS" \
+                  PHASE=$(oc get csv "$CSV" -n "$ACM_NS" \
                     -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
                   if [[ "$PHASE" == "Succeeded" ]]; then
                     echo "ACM operator CSV $CSV is ready"
@@ -208,7 +208,7 @@ spec:
               oc wait --for=jsonpath='{.status.phase}'=Running \
                 mch/multiclusterhub -n "$ACM_NS" --timeout=30m
 
-              ACM_VERSION=$$(oc get mch multiclusterhub -n "$ACM_NS" \
+              ACM_VERSION=$(oc get mch multiclusterhub -n "$ACM_NS" \
                 -o jsonpath='{.status.currentVersion}')
               echo "ACM $ACM_VERSION is Running"
 
@@ -248,14 +248,14 @@ spec:
               #!/usr/bin/env bash
               set -euo pipefail
 
-              KUBECONFIG_VALUE=$$(oc get secret "$SECRET_NAME" \
+              KUBECONFIG_VALUE=$(oc get secret "$SECRET_NAME" \
                 -o jsonpath='{.data.kubeconfig}' | base64 -d)
-              KUBECONFIG="$$(mktemp)"
+              KUBECONFIG="$(mktemp)"
               trap 'rm -f "$KUBECONFIG"' EXIT
               echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
               export KUBECONFIG
 
-              SERVICE_IMAGE=$$(echo "$SNAPSHOT" | jq -r \
+              SERVICE_IMAGE=$(echo "$SNAPSHOT" | jq -r \
                 '.components[] | select(.name == "insights-on-prem") | .containerImage')
               echo "Deploying service image: $SERVICE_IMAGE"
 
@@ -325,14 +325,14 @@ spec:
               #!/usr/bin/env bash
               set -euo pipefail
 
-              KUBECONFIG_VALUE=$$(oc get secret "$SECRET_NAME" \
+              KUBECONFIG_VALUE=$(oc get secret "$SECRET_NAME" \
                 -o jsonpath='{.data.kubeconfig}' | base64 -d)
-              KUBECONFIG="$$(mktemp)"
+              KUBECONFIG="$(mktemp)"
               trap 'rm -f "$KUBECONFIG"' EXIT
               echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
               export KUBECONFIG
 
-              COMMIT_SHA=$$(echo "$SNAPSHOT" | jq -r \
+              COMMIT_SHA=$(echo "$SNAPSHOT" | jq -r \
                 '.components[] | select(.name == "insights-on-prem") | .source.git.revision')
               echo "Running smoke tests from commit: $COMMIT_SHA"
 
