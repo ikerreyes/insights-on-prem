@@ -1,8 +1,8 @@
 """Database models for Insights On Premise."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, PrimaryKeyConstraint
+from sqlalchemy import Column, DateTime, Index, PrimaryKeyConstraint
 from sqlalchemy.dialects.postgresql import VARCHAR, insert
 from sqlalchemy.orm import Session
 
@@ -41,7 +41,7 @@ class Report(Base):
         :param gathered_at: When the report was gathered
         :return: The created or updated Report instance
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Prepare insert statement with ON CONFLICT DO UPDATE
         stmt = insert(cls).values(
@@ -112,7 +112,7 @@ class RuleHit(Base):
         :param error_key: Error key for the rule
         :return: The created or updated RuleHit instance
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Prepare insert statement with ON CONFLICT DO UPDATE
         stmt = insert(cls).values(
@@ -157,3 +157,79 @@ class RuleHit(Base):
         """
         count = db.query(cls).filter_by(cluster_id=cluster_id).delete()
         return count
+
+
+class RequestReport(Base):
+    """
+    Table storing simplified reports for on-demand data gathering requests.
+
+    Each row represents a processed request identified by request_id.
+    Row presence indicates the request has been processed.
+    """
+
+    __tablename__ = "request_report"
+
+    request_id = Column(VARCHAR, nullable=False, primary_key=True)
+    cluster_id = Column(VARCHAR, nullable=False)
+    report = Column(VARCHAR, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (Index("idx_request_report_created_at", "created_at"),)
+
+    @classmethod
+    def create(
+        cls,
+        db: Session,
+        request_id: str,
+        cluster_id: str,
+        report: str,
+    ) -> "RequestReport":
+        """
+        Create a request report record after successful processing.
+
+        :param db: Database session
+        :param request_id: Request identifier from upload
+        :param cluster_id: Cluster identifier from archive
+        :param report: Simplified report JSON string
+        :return: The created RequestReport instance
+        """
+        record = cls(
+            request_id=request_id,
+            cluster_id=cluster_id,
+            report=report,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(record)
+        return record
+
+    @classmethod
+    def get_by_cluster_and_request(
+        cls,
+        db: Session,
+        cluster_id: str,
+        request_id: str,
+    ) -> "RequestReport":
+        """
+        Get a request report by cluster ID and request ID.
+
+        :param db: Database session
+        :param cluster_id: Cluster identifier
+        :param request_id: Request identifier
+        :return: RequestReport instance or None
+        """
+        return (
+            db.query(cls)
+            .filter_by(cluster_id=cluster_id, request_id=request_id)
+            .first()
+        )
+
+    @classmethod
+    def delete_older_than(cls, db: Session, cutoff: datetime) -> int:
+        """
+        Delete all request reports older than the given cutoff.
+
+        :param db: Database session
+        :param cutoff: Delete records created before this time
+        :return: Number of rows deleted
+        """
+        return db.query(cls).filter(cls.created_at < cutoff).delete()

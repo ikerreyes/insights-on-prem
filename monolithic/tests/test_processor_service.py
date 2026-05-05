@@ -9,6 +9,8 @@ from app.exceptions import ProcessingError
 from app.models import Report, RuleHit
 from app.services.processor_service import ProcessorService
 
+REQUEST_ID = "00000000-0000-0000-0000-000000000000"
+
 
 @pytest.fixture
 def service_config(tmp_path):
@@ -152,7 +154,9 @@ def test_save_results_success(processor_service, database):
         [("ccx_rules_ocp.external.rules.example.report", "ERROR_KEY")]
     )
 
-    count = processor_service.save_results(database, cluster_id, results_json)
+    count = processor_service.save_results(
+        database, cluster_id, results_json, REQUEST_ID
+    )
 
     assert count == 1
 
@@ -179,7 +183,7 @@ def test_save_results_transaction_rollback_on_error(processor_service, database)
         patch.object(RuleHit, "upsert", side_effect=Exception("Database error")),
         pytest.raises(ProcessingError, match="Database save failed"),
     ):
-        processor_service.save_results(database, cluster_id, results_json)
+        processor_service.save_results(database, cluster_id, results_json, REQUEST_ID)
 
     # Verify nothing was committed
     report = database.query(Report).filter_by(cluster=cluster_id).first()
@@ -204,7 +208,7 @@ def test_save_results_replaces_old_rule_hits(processor_service, database):
     # Save new results with different rules
     results_json = _make_results_json([("new_rule", "NEW_KEY")])
 
-    processor_service.save_results(database, cluster_id, results_json)
+    processor_service.save_results(database, cluster_id, results_json, REQUEST_ID)
 
     # Verify only new rule exists
     new_hits = database.query(RuleHit).filter_by(cluster_id=cluster_id).all()
@@ -213,12 +217,32 @@ def test_save_results_replaces_old_rule_hits(processor_service, database):
     assert new_hits[0].error_key == "NEW_KEY"
 
 
+def test_save_results_upserts_report_on_reprocessing(processor_service, database):
+    """Test that reprocessing a cluster updates the existing report, not duplicates it."""
+    cluster_id = "test-cluster-123"
+    first_results = _make_results_json([("rule_a", "ERR_A")])
+    second_results = _make_results_json([("rule_b", "ERR_B")])
+
+    processor_service.save_results(database, cluster_id, first_results, REQUEST_ID)
+    processor_service.save_results(
+        database, cluster_id, second_results, "second-request"
+    )
+
+    reports = database.query(Report).filter_by(cluster=cluster_id).all()
+    assert len(reports) == 1
+
+    report_data = json.loads(reports[0].report)
+    assert report_data["results"] == second_results
+
+
 def test_save_results_empty_rule_hits(processor_service, database):
     """Test saving results with no rule hits."""
     cluster_id = "test-cluster-123"
     results_json = json.dumps({"reports": []})
 
-    count = processor_service.save_results(database, cluster_id, results_json)
+    count = processor_service.save_results(
+        database, cluster_id, results_json, REQUEST_ID
+    )
 
     assert count == 0
 
@@ -265,7 +289,7 @@ def test_process_archive_success(
         mock_stringio.return_value = mock_output
 
         cluster_id, count = processor_service.process_archive(
-            database, "/fake/archive.tar.gz"
+            database, "/fake/archive.tar.gz", REQUEST_ID
         )
 
     assert cluster_id == "test-cluster-123"
@@ -278,7 +302,7 @@ def test_process_archive_extraction_fails(mock_extract, processor_service, datab
     mock_extract.side_effect = Exception("Extraction failed")
 
     with pytest.raises(ProcessingError, match="Analysis failed"):
-        processor_service.process_archive(database, "/fake/archive.tar.gz")
+        processor_service.process_archive(database, "/fake/archive.tar.gz", REQUEST_ID)
 
 
 @patch("app.services.processor_service.extract")
@@ -295,4 +319,4 @@ def test_process_archive_size_limit_exceeded(mock_extract, service_config, tmp_p
         patch.object(service, "_validate_size", return_value=False),
         pytest.raises(ProcessingError, match="Archive exceeds size limit"),
     ):
-        service.process_archive(Mock(), "/fake/archive.tar.gz")
+        service.process_archive(Mock(), "/fake/archive.tar.gz", REQUEST_ID)

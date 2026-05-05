@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
 
@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.config import AppConfig
 from app.exceptions import ProcessingError
-from app.models import Report, RuleHit
+from app.models import Report, RequestReport, RuleHit
+from app.utils.content import normalize_rule_fqdn
 
 logger = logging.getLogger(__name__)
 
@@ -214,13 +215,20 @@ class ProcessorService:
 
         return rule_hits
 
-    def save_results(self, db: Session, cluster_id: str, results_json: str) -> int:
+    def save_results(
+        self,
+        db: Session,
+        cluster_id: str,
+        results_json: str,
+        request_id: str,
+    ) -> int:
         """
         Save processing results to database.
 
         :param db: Database session
         :param cluster_id: Cluster identifier
         :param results_json: JSON results from insights-core
+        :param request_id: Request ID for on-demand gathering tracking
         :return: Number of rule hits saved
         """
         # Extract rule hits from results
@@ -231,7 +239,7 @@ class ProcessorService:
             report_data = {
                 "cluster_id": cluster_id,
                 "rule_count": len(rule_hits),
-                "processed_at": datetime.utcnow().isoformat(),
+                "processed_at": datetime.now(timezone.utc).isoformat(),
                 "results": results_json,
             }
 
@@ -239,11 +247,11 @@ class ProcessorService:
                 db,
                 cluster=cluster_id,
                 report=json.dumps(report_data),
-                gathered_at=datetime.utcnow(),
+                gathered_at=datetime.now(timezone.utc),
             )
 
-            # Upsert new rule hits (preserves impacted_since for existing ones)
-            new_keys = set()
+            # Replace all rule hits for this cluster atomically
+            RuleHit.delete_for_cluster(db, cluster_id)
             for hit in rule_hits:
                 RuleHit.upsert(
                     db,
@@ -251,13 +259,20 @@ class ProcessorService:
                     rule_fqdn=hit["rule_fqdn"],
                     error_key=hit["error_key"],
                 )
-                new_keys.add((hit["rule_fqdn"], hit["error_key"]))
 
-            # Remove rule hits that are no longer firing
-            existing_hits = db.query(RuleHit).filter_by(cluster_id=cluster_id).all()
-            for existing in existing_hits:
-                if (existing.rule_fqdn, existing.error_key) not in new_keys:
-                    db.delete(existing)
+            # Save simplified report for on-demand request tracking
+            simplified_report = json.dumps(
+                [
+                    {**hit, "rule_fqdn": normalize_rule_fqdn(hit["rule_fqdn"])}
+                    for hit in rule_hits
+                ]
+            )
+            RequestReport.create(
+                db,
+                request_id=request_id,
+                cluster_id=cluster_id,
+                report=simplified_report,
+            )
 
             # Commit the transaction
             db.commit()
@@ -273,12 +288,18 @@ class ProcessorService:
             )
             raise ProcessingError(f"Database save failed: {str(e)}") from e
 
-    def process_archive(self, db: Session, archive_path: str) -> tuple[str, int]:
+    def process_archive(
+        self,
+        db: Session,
+        archive_path: str,
+        request_id: str,
+    ) -> tuple[str, int]:
         """
         Main processing function - extract, analyze, and save archive.
 
         :param db: Database session
         :param archive_path: Path to uploaded archive file
+        :param request_id: Request ID for on-demand gathering
         :return: Tuple of (cluster_id, number of rules found)
         :raises ProcessingError: If processing fails at any stage
         """
@@ -288,7 +309,7 @@ class ProcessorService:
         cluster_id, results_json = self.process_with_insights_core(archive_path)
 
         # Save to database
-        rules_count = self.save_results(db, cluster_id, results_json)
+        rules_count = self.save_results(db, cluster_id, results_json, request_id)
 
         logger.info(f"Completed processing for cluster {cluster_id}")
         return cluster_id, rules_count

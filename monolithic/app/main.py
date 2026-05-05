@@ -1,35 +1,40 @@
 """FastAPI application for Insights On Premise."""
 
 import asyncio
+import contextlib
+import json
 import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import (
     BackgroundTasks,
     Depends,
     FastAPI,
     File,
-    Header,
     HTTPException,
     Request,
     UploadFile,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from app.config_loader import load_config, load_insights_components
 from app.content_parser_yaml import YAMLContentParser
 from app.database import get_db, init_db
 from app.exceptions import ValidationError
+from app.models import RequestReport
 from app.schemas import (
     BatchUpgradeRisksPredictionRequest,
     BatchUpgradeRisksPredictionResponse,
     ClusterPrediction,
     ErrorResponse,
     ReportResponseV2,
+    RequestReportResponse,
+    RequestStatusResponse,
+    SimplifiedRuleHit,
     UploadResponse,
 )
 from app.services.content_service import ContentService
@@ -69,7 +74,42 @@ async def lifespan(app: FastAPI):
     app.state.upgrade_prediction_service = UpgradePredictionService()
     logger.info("All services initialized successfully")
 
+    # Start periodic cleanup of old request reports
+    cleanup_task = asyncio.create_task(
+        _cleanup_old_request_reports(session_factory, config)
+    )
+
     yield
+
+    # Cancel cleanup task on shutdown
+    cleanup_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await cleanup_task
+
+
+async def _cleanup_old_request_reports(session_factory, config):
+    """Periodically delete old request report records."""
+    while True:
+        db = session_factory()
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(
+                hours=config.request_report_retention_hours
+            )
+            deleted = RequestReport.delete_older_than(db, cutoff)
+            db.commit()
+            if deleted:
+                logger.info(f"Cleaned up {deleted} old request reports")
+        except Exception as e:
+            logger.error(f"Request report cleanup failed: {e}")
+            try:
+                db.rollback()
+            except Exception as rollback_err:
+                logger.error(f"Rollback also failed: {rollback_err}")
+        finally:
+            db.close()
+
+        # Wait for configured time until next cleanup
+        await asyncio.sleep(config.request_report_cleanup_interval_minutes * 60)
 
 
 # Create FastAPI app
@@ -109,26 +149,28 @@ async def health_check():
 )
 async def upload_archive(
     request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),  # noqa: B008
-    x_rh_insights_request_id: str = Header(None, alias="x-rh-insights-request-id"),  # noqa: B008
 ):
     """
     Upload and process Red Hat Insights archive.
 
     :param file: Uploaded archive file (tar, tar.gz, or tgz format)
     :param background_tasks: FastAPI background tasks
-    :param x_rh_insights_request_id: Optional request ID header
     :return: UploadResponse with accepted status
     :raises HTTPException: On validation errors
     """
     upload_service: UploadService = request.app.state.upload_service
 
-    # Generate or use provided request ID
-    request_id = x_rh_insights_request_id or str(uuid.uuid4())
+    request_id = str(uuid.uuid4())
 
     try:
-        return await upload_service.process_upload(background_tasks, file, request_id)
+        upload_response = await upload_service.process_upload(
+            background_tasks, file, request_id
+        )
+        response.headers["x-rh-insights-request-id"] = request_id
+        return upload_response
 
     except ValidationError as e:
         raise HTTPException(
@@ -259,6 +301,100 @@ async def upgrade_risks_prediction_batch(
 
     predictions = await asyncio.gather(*[predict_for_cluster(c) for c in clusters])
     return BatchUpgradeRisksPredictionResponse(predictions=list(predictions))
+
+
+@app.get(
+    "/api/v2/cluster/{cluster_id}/request/{request_id}/status",
+    response_model=RequestStatusResponse,
+    status_code=200,
+    responses={
+        404: {"model": ErrorResponse, "description": "Request ID not found"},
+    },
+)
+async def get_request_status(
+    cluster_id: str,
+    request_id: str,
+    db: Session = Depends(get_db),  # noqa: B008
+):
+    """
+    Check the processing status of an on-demand data gathering request.
+
+    Returns 404 if the request has not been processed yet (operator retries).
+    """
+    record = RequestReport.get_by_cluster_and_request(db, cluster_id, request_id)
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail="Request ID not found for given cluster_id",
+        )
+
+    return RequestStatusResponse(
+        cluster=cluster_id,
+        requestID=request_id,
+        status="processed",
+    )
+
+
+@app.get(
+    "/api/v2/cluster/{cluster_id}/request/{request_id}/report",
+    response_model=RequestReportResponse,
+    status_code=200,
+    responses={
+        404: {"model": ErrorResponse, "description": "Request ID not found"},
+    },
+)
+async def get_request_report(
+    request: Request,
+    cluster_id: str,
+    request_id: str,
+    db: Session = Depends(get_db),  # noqa: B008
+):
+    """
+    Retrieve the simplified report for an on-demand data gathering request.
+    The raw report from DB does not include rules content, so the endpoint
+    also repopulates with that (description and total risk).
+
+    Returns 404 if the request has not been processed yet.
+    """
+    record = RequestReport.get_by_cluster_and_request(db, cluster_id, request_id)
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail="Request ID not found for given cluster_id",
+        )
+
+    content_service = request.app.state.content_service
+
+    try:
+        rule_hits_raw = json.loads(record.report)
+    except (json.JSONDecodeError, TypeError):
+        rule_hits_raw = []
+
+    rule_hits = []
+    for hit in rule_hits_raw:
+        rule_fqdn = hit.get("rule_fqdn", "")
+        error_key = hit.get("error_key", "")
+        content = content_service.get_content(rule_fqdn, error_key)
+        if not content:
+            logger.warning(
+                f"Content not found for rule {rule_fqdn} error_key {error_key}, skipping"
+            )
+            continue
+        rule_hits.append(
+            SimplifiedRuleHit(
+                rule_fqdn=rule_fqdn,
+                error_key=error_key,
+                description=content.get("description", ""),
+                total_risk=content.get("total_risk", 0),
+            )
+        )
+
+    return RequestReportResponse(
+        cluster=cluster_id,
+        requestID=request_id,
+        status="processed",
+        report=rule_hits,
+    )
 
 
 @app.exception_handler(HTTPException)

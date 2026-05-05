@@ -4,7 +4,7 @@ import contextlib
 import logging
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import BackgroundTasks, UploadFile
 from sqlalchemy.orm import sessionmaker
@@ -125,7 +125,7 @@ class UploadService:
             db = self.session_factory()
             try:
                 cluster_id, rules_count = self.processor_service.process_archive(
-                    db, temp_file_path
+                    db, temp_file_path, request_id
                 )
                 logger.info(
                     f"Request {request_id}: Successfully processed cluster {cluster_id} "
@@ -174,5 +174,5 @@ class UploadService:
         return UploadResponse(
             request_id=request_id,
             status="accepted",
-            uploaded_at=datetime.utcnow(),
+            uploaded_at=datetime.now(timezone.utc),
         )
