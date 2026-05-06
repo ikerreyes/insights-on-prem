@@ -45,9 +45,9 @@ spec:
               "architecture": "amd64",
               "cloud": "aws",
               "labels": {
-                "region": "us-east-1"
+                "region": "us-east-2"
               },
-              "owner": "openshift-ci",
+              "owner": "obs",
               "product": "ocp",
               "timeout": "2h0m0s",
               "version": "$(params.ocp-version)"
