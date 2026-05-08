@@ -5,9 +5,9 @@ metadata:
   name: insights-on-prem-smoke-test-pipeline
 spec:
   description: |
-    Smoke test pipeline for insights-on-prem. Claims a cluster from the obs pool,
-    installs ACM, deploys the service image from SNAPSHOT, and verifies the pod
-    is running.
+    Smoke test pipeline for insights-on-prem. Provisions a HyperShift hosted
+    cluster, installs ACM, deploys the service image from SNAPSHOT, and verifies
+    the pod is running.
   params:
     - name: SNAPSHOT
       description: The JSON string of the Snapshot under test
@@ -17,7 +17,7 @@ spec:
       default: insights-on-prem-smoke-test
     - name: ocp-version
       description: OCP version for the ephemeral cluster
-      default: "4.21"
+      default: "4.17"
     - name: namespace
       description: Namespace to deploy insights-on-prem into
       default: insights-on-prem
@@ -38,19 +38,21 @@ spec:
         - name: ownerUid
           value: $(context.pipelineRun.uid)
         - name: workflow
-          value: generic-claim
-        - name: clusterClaim
+          value: hypershift-hostedcluster-workflow
+        - name: clusterProfile
+          value: openshift-org-aws
+        - name: env
+          value: '{"COMPUTE_NODE_TYPE": "m5.xlarge", "HYPERSHIFT_NODE_COUNT": "3"}'
+        - name: releases
           value: |
             {
-              "architecture": "amd64",
-              "cloud": "aws",
-              "labels": {
-                "region": "us-east-2"
-              },
-              "owner": "obs",
-              "product": "ocp",
-              "timeout": "2h0m0s",
-              "version": "$(params.ocp-version)"
+              "latest": {
+                "release": {
+                  "channel": "stable",
+                  "version": "$(params.ocp-version)",
+                  "architecture": "multi"
+                }
+              }
             }
 
     - name: install-acm
@@ -65,45 +67,19 @@ spec:
           - name: install-acm
             image: registry.redhat.io/openshift4/ose-cli:latest
             env:
-              - name: SECRET_NAME
-                value: $(params.kubeconfigSecretRef)
+              - name: KUBECONFIG
+                value: /var/run/secrets/cluster/kubeconfig
+            volumeMounts:
+              - name: cluster-credentials
+                mountPath: /var/run/secrets/cluster
+                readOnly: true
             script: |
               #!/usr/bin/env bash
               set -euo pipefail
 
-              # Read kubeconfig at runtime instead of via secretKeyRef env var.
-              # The Crossplane connection secret may not be populated yet when the
-              # pod starts — ClusterReady can be set before the kubeconfig is written.
-              echo "Waiting for kubeconfig in secret $SECRET_NAME..."
-              KUBECONFIG_VALUE=""
-              for i in $(seq 1 30); do
-                KUBECONFIG_VALUE=$(oc get secret "$SECRET_NAME" \
-                  -o jsonpath='{.data.kubeconfig}' 2>/dev/null || echo "")
-                if [[ -n "$KUBECONFIG_VALUE" ]]; then
-                  KUBECONFIG_VALUE=$(echo "$KUBECONFIG_VALUE" | base64 -d)
-                  echo "Kubeconfig retrieved from secret"
-                  break
-                fi
-                echo "  Attempt $i: kubeconfig key not found, listing secret keys..."
-                oc get secret "$SECRET_NAME" -o jsonpath='{.data}' 2>/dev/null | head -c 200 || true
-                echo ""
-                sleep 10
-              done
-
-              if [[ -z "$KUBECONFIG_VALUE" ]]; then
-                echo "ERROR: kubeconfig not found in secret $SECRET_NAME after 5 minutes"
-                echo "Secret contents:"
-                oc describe secret "$SECRET_NAME" || true
-                exit 1
-              fi
-
-              KUBECONFIG="$(mktemp)"
-              trap 'rm -f "$KUBECONFIG"' EXIT
-              echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
-              export KUBECONFIG
-
               echo "--- Cluster info ---"
               oc cluster-info
+              oc get nodes
 
               ACM_NS="ocm"
               oc create namespace "$ACM_NS"
@@ -216,6 +192,10 @@ spec:
               oc wait --for=condition=ManagedClusterConditionAvailable \
                 managedcluster/local-cluster --timeout=10m
               echo "local-cluster is available"
+        volumes:
+          - name: cluster-credentials
+            secret:
+              secretName: $(params.kubeconfigSecretRef)
       params:
         - name: kubeconfigSecretRef
           value: $(tasks.provision-ephemeral-cluster.results.secretRef)
@@ -238,22 +218,19 @@ spec:
           - name: deploy-service
             image: registry.redhat.io/openshift4/ose-cli:latest
             env:
-              - name: SECRET_NAME
-                value: $(params.kubeconfigSecretRef)
+              - name: KUBECONFIG
+                value: /var/run/secrets/cluster/kubeconfig
               - name: SNAPSHOT
                 value: $(params.SNAPSHOT)
               - name: NAMESPACE
                 value: $(params.namespace)
+            volumeMounts:
+              - name: cluster-credentials
+                mountPath: /var/run/secrets/cluster
+                readOnly: true
             script: |
               #!/usr/bin/env bash
               set -euo pipefail
-
-              KUBECONFIG_VALUE=$(oc get secret "$SECRET_NAME" \
-                -o jsonpath='{.data.kubeconfig}' | base64 -d)
-              KUBECONFIG="$(mktemp)"
-              trap 'rm -f "$KUBECONFIG"' EXIT
-              echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
-              export KUBECONFIG
 
               SERVICE_IMAGE=$(echo "$SNAPSHOT" | jq -r \
                 '.components[] | select(.name == "insights-on-prem") | .containerImage')
@@ -289,6 +266,10 @@ spec:
               echo "Waiting for deployment rollout..."
               oc rollout status deployment/insights-on-prem -n "$NAMESPACE" --timeout=300s
               echo "Service deployed successfully"
+        volumes:
+          - name: cluster-credentials
+            secret:
+              secretName: $(params.kubeconfigSecretRef)
       params:
         - name: kubeconfigSecretRef
           value: $(tasks.provision-ephemeral-cluster.results.secretRef)
@@ -315,22 +296,19 @@ spec:
           - name: run-smoke-test
             image: quay.io/ccxdev/insights-on-prem-tests:latest
             env:
-              - name: SECRET_NAME
-                value: $(params.kubeconfigSecretRef)
+              - name: KUBECONFIG
+                value: /var/run/secrets/cluster/kubeconfig
               - name: SNAPSHOT
                 value: $(params.SNAPSHOT)
               - name: NAMESPACE
                 value: $(params.namespace)
+            volumeMounts:
+              - name: cluster-credentials
+                mountPath: /var/run/secrets/cluster
+                readOnly: true
             script: |
               #!/usr/bin/env bash
               set -euo pipefail
-
-              KUBECONFIG_VALUE=$(oc get secret "$SECRET_NAME" \
-                -o jsonpath='{.data.kubeconfig}' | base64 -d)
-              KUBECONFIG="$(mktemp)"
-              trap 'rm -f "$KUBECONFIG"' EXIT
-              echo "$KUBECONFIG_VALUE" > "$KUBECONFIG"
-              export KUBECONFIG
 
               COMMIT_SHA=$(echo "$SNAPSHOT" | jq -r \
                 '.components[] | select(.name == "insights-on-prem") | .source.git.revision')
@@ -344,6 +322,10 @@ spec:
 
               export NAMESPACE
               pytest tests/integration/test_smoke.py -v --junitxml=/tmp/smoke-test-results.xml
+        volumes:
+          - name: cluster-credentials
+            secret:
+              secretName: $(params.kubeconfigSecretRef)
       params:
         - name: kubeconfigSecretRef
           value: $(tasks.provision-ephemeral-cluster.results.secretRef)
