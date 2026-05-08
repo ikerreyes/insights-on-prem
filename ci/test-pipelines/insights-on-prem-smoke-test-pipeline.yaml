@@ -41,6 +41,16 @@ spec:
           value: ipi-aws
         - name: clusterProfile
           value: aws
+        - name: clusterClaim
+          value: |
+            {
+              "architecture": "amd64",
+              "cloud": "aws",
+              "owner": "obs",
+              "product": "ocp",
+              "timeout": "2h0m0s",
+              "version": "$(params.ocp-version)"
+            }
         - name: releases
           value: |
             {
