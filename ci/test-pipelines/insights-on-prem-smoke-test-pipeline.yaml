@@ -41,6 +41,16 @@ spec:
           value: hypershift-hostedcluster-workflow
         - name: clusterProfile
           value: openshift-org-aws
+        - name: clusterClaim
+          value: |
+            {
+              "architecture": "amd64",
+              "cloud": "aws",
+              "owner": "obs",
+              "product": "ocp",
+              "timeout": "2h0m0s",
+              "version": "$(params.ocp-version)"
+            }
         - name: env
           value: '{"COMPUTE_NODE_TYPE": "m5.xlarge", "HYPERSHIFT_NODE_COUNT": "3"}'
         - name: releases
