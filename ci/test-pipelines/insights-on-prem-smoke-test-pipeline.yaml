@@ -5,9 +5,9 @@ metadata:
   name: insights-on-prem-smoke-test-pipeline
 spec:
   description: |
-    Smoke test pipeline for insights-on-prem. Claims a cluster from the obs pool,
-    installs ACM, deploys the service image from SNAPSHOT, and verifies the pod
-    is running.
+    Smoke test pipeline for insights-on-prem. Provisions an ephemeral cluster
+    via IPI, installs ACM, deploys the service image from SNAPSHOT, and verifies
+    the pod is running.
   params:
     - name: SNAPSHOT
       description: The JSON string of the Snapshot under test
@@ -38,19 +38,19 @@ spec:
         - name: ownerUid
           value: $(context.pipelineRun.uid)
         - name: workflow
-          value: generic-claim
-        - name: clusterClaim
+          value: ipi-aws
+        - name: clusterProfile
+          value: aws
+        - name: releases
           value: |
             {
-              "architecture": "amd64",
-              "cloud": "aws",
-              "labels": {
-                "region": "us-east-2"
-              },
-              "owner": "obs",
-              "product": "ocp",
-              "timeout": "2h0m0s",
-              "version": "$(params.ocp-version)"
+              "latest": {
+                "release": {
+                  "channel": "stable",
+                  "version": "$(params.ocp-version)",
+                  "architecture": "amd64"
+                }
+              }
             }
 
     - name: install-acm
