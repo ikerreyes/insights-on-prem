@@ -5,9 +5,9 @@ metadata:
   name: insights-on-prem-smoke-test-pipeline
 spec:
   description: |
-    Smoke test pipeline for insights-on-prem. Provisions a HyperShift hosted
-    cluster, installs ACM, deploys the service image from SNAPSHOT, and verifies
-    the pod is running.
+    Smoke test pipeline for insights-on-prem. Provisions an ephemeral OCP
+    cluster, installs ACM, deploys the service image from SNAPSHOT, and runs
+    integration tests.
   params:
     - name: SNAPSHOT
       description: The JSON string of the Snapshot under test
@@ -22,7 +22,7 @@ spec:
       description: Namespace to deploy insights-on-prem into
       default: insights-on-prem
   tasks:
-    - name: provision-ephemeral-cluster
+    - name: provision-cluster
       taskRef:
         resolver: git
         params:
@@ -38,9 +38,7 @@ spec:
         - name: ownerUid
           value: $(context.pipelineRun.uid)
         - name: workflow
-          value: hypershift-hostedcluster-workflow
-        - name: clusterProfile
-          value: openshift-org-aws
+          value: generic-claim
         - name: clusterClaim
           value: |
             {
@@ -51,23 +49,10 @@ spec:
               "timeout": "2h0m0s",
               "version": "$(params.ocp-version)"
             }
-        - name: env
-          value: '{"COMPUTE_NODE_TYPE": "m5.xlarge", "HYPERSHIFT_NODE_COUNT": "3"}'
-        - name: releases
-          value: |
-            {
-              "latest": {
-                "release": {
-                  "channel": "stable",
-                  "version": "$(params.ocp-version)",
-                  "architecture": "multi"
-                }
-              }
-            }
 
     - name: install-acm
       runAfter:
-        - provision-ephemeral-cluster
+        - provision-cluster
       taskSpec:
         params:
           - name: kubeconfigSecretRef
@@ -208,7 +193,7 @@ spec:
               secretName: $(params.kubeconfigSecretRef)
       params:
         - name: kubeconfigSecretRef
-          value: $(tasks.provision-ephemeral-cluster.results.secretRef)
+          value: $(tasks.provision-cluster.results.secretRef)
 
     - name: deploy-service
       runAfter:
@@ -282,7 +267,7 @@ spec:
               secretName: $(params.kubeconfigSecretRef)
       params:
         - name: kubeconfigSecretRef
-          value: $(tasks.provision-ephemeral-cluster.results.secretRef)
+          value: $(tasks.provision-cluster.results.secretRef)
         - name: SNAPSHOT
           value: $(params.SNAPSHOT)
         - name: namespace
@@ -338,7 +323,7 @@ spec:
               secretName: $(params.kubeconfigSecretRef)
       params:
         - name: kubeconfigSecretRef
-          value: $(tasks.provision-ephemeral-cluster.results.secretRef)
+          value: $(tasks.provision-cluster.results.secretRef)
         - name: SNAPSHOT
           value: $(params.SNAPSHOT)
         - name: namespace
@@ -357,6 +342,6 @@ spec:
             value: tasks/deprovision-ephemeral-cluster/0.1/deprovision-ephemeral-cluster.yaml
       params:
         - name: testPlatformClusterClaimName
-          value: $(tasks.provision-ephemeral-cluster.results.testPlatformClusterClaimName)
+          value: $(tasks.provision-cluster.results.testPlatformClusterClaimName)
         - name: testPlatformClusterClaimNamespace
-          value: $(tasks.provision-ephemeral-cluster.results.testPlatformClusterClaimNamespace)
+          value: $(tasks.provision-cluster.results.testPlatformClusterClaimNamespace)
