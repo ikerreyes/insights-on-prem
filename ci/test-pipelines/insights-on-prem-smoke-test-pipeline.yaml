@@ -156,8 +156,18 @@ spec:
                 --type=kubernetes.io/dockerconfigjson
               rm -f /tmp/ps.json
 
+              echo "Waiting for MultiClusterHub CRD to be available..."
+              for i in $(seq 1 30); do
+                if oc get crd multiclusterhubs.operator.open-cluster-management.io &>/dev/null; then
+                  echo "MultiClusterHub CRD is ready"
+                  break
+                fi
+                echo "  Attempt $i: CRD not registered yet..."
+                sleep 10
+              done
+
               oc apply -f - <<EOF
-              apiVersion: operator.ocm.io/v1
+              apiVersion: operator.open-cluster-management.io/v1
               kind: MultiClusterHub
               metadata:
                 name: multiclusterhub
