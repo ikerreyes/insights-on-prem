@@ -17,7 +17,7 @@ spec:
       default: insights-on-prem-smoke-test
     - name: ocp-version
       description: OCP version for the ephemeral cluster
-      default: "4.17"
+      default: "4.21"
     - name: namespace
       description: Namespace to deploy insights-on-prem into
       default: insights-on-prem
