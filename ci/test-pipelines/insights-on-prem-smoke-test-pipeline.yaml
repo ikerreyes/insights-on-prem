@@ -237,8 +237,7 @@ spec:
               #!/usr/bin/env bash
               set -euo pipefail
 
-              SERVICE_IMAGE=$(echo "$SNAPSHOT" | jq -r \
-                '.components[] | select(.name == "insights-on-prem") | .containerImage')
+              SERVICE_IMAGE=$(python3 -c "import json,sys; comps=json.loads(sys.stdin.read())['components']; print(next(c['containerImage'] for c in comps if c['name']=='insights-on-prem'))" <<<"$SNAPSHOT")
               echo "Deploying service image: $SERVICE_IMAGE"
 
               oc create namespace "$NAMESPACE"
@@ -315,8 +314,7 @@ spec:
               #!/usr/bin/env bash
               set -euo pipefail
 
-              COMMIT_SHA=$(echo "$SNAPSHOT" | jq -r \
-                '.components[] | select(.name == "insights-on-prem") | .source.git.revision')
+              COMMIT_SHA=$(python3 -c "import json,sys; comps=json.loads(sys.stdin.read())['components']; print(next(c['source']['git']['revision'] for c in comps if c['name']=='insights-on-prem'))" <<<"$SNAPSHOT")
               echo "Running smoke tests from commit: $COMMIT_SHA"
 
               git init /tmp/repo
