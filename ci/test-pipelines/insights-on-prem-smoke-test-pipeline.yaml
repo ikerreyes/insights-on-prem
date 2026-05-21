@@ -46,9 +46,11 @@ spec:
               "cloud": "aws",
               "owner": "obs",
               "product": "ocp",
-              "timeout": "2h0m0s",
+              "timeout": "3h0m0s",
               "version": "$(params.ocp-version)"
             }
+        - name: timeout
+          value: "3h"
 
     - name: install-acm
       runAfter:
@@ -72,7 +74,15 @@ spec:
               #!/usr/bin/env bash
               set -euo pipefail
 
-              echo "--- Cluster info ---"
+              echo "--- Waiting for cluster API to be reachable ---"
+              for i in $(seq 1 30); do
+                if oc cluster-info &>/dev/null; then
+                  echo "Cluster API is reachable"
+                  break
+                fi
+                echo "  Attempt $i: cluster API not reachable yet..."
+                sleep 10
+              done
               oc cluster-info
               oc get nodes
 
