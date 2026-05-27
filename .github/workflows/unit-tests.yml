@@ -8,22 +8,10 @@ on:
 
 jobs:
   unit-tests:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r monolithic/requirements-test.txt
-
-      - name: Run unit tests
-        working-directory: monolithic
-        run: pytest tests/ -v --tb=short
+    uses: RedHatInsights/processing-tools/.github/workflows/pytests.yaml@master
+    secrets: inherit
+    with:
+      python_version: '3.12'
+      requirements_file: monolithic/requirements-test.txt
+      packages: monolithic
+      coverage: true
