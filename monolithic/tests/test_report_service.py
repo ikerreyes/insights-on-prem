@@ -1,13 +1,13 @@
 """Tests for ReportService."""
+
 import json
 from datetime import datetime
 from unittest.mock import Mock
 
 import pytest
-
 from app.models import Report, RuleHit
+from app.schemas import ReportMetaV2, ReportV2
 from app.services.report_service import ReportService
-from app.schemas import ReportV2, ReportMetaV2
 
 CLUSTER_ID = "test-cluster-123"
 RULE_FQDN = "ccx_rules_ocp.external.rules.test_rule"
@@ -57,13 +57,11 @@ def test_get_cluster_report_v2_success(database, report_service, mock_content_se
                 "details": {
                     "info": "Additional info",
                     "count": 3,
-                }
+                },
             }
         ]
     }
-    report_json = {
-        "results": json.dumps(insights_results)
-    }
+    report_json = {"results": json.dumps(insights_results)}
 
     report = Report(
         cluster=CLUSTER_ID,
@@ -132,7 +130,9 @@ def test_get_cluster_report_v2_invalid_json(database, report_service):
     assert len(result.data) == 0
 
 
-def test_get_cluster_report_v2_content_not_found(database, report_service, mock_content_service):
+def test_get_cluster_report_v2_content_not_found(
+    database, report_service, mock_content_service
+):
     """Test that rule hits without content are skipped."""
     report = Report(
         cluster=CLUSTER_ID,
@@ -160,7 +160,9 @@ def test_get_cluster_report_v2_content_not_found(database, report_service, mock_
     assert len(result.data) == 0
 
 
-def test_build_rule_hits_v2_normalizes_rule_fqdn(database, report_service, mock_content_service):
+def test_build_rule_hits_v2_normalizes_rule_fqdn(
+    database, report_service, mock_content_service
+):
     """Test that .report suffix is stripped when looking up content."""
     report = Report(
         cluster=CLUSTER_ID,

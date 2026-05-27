@@ -1,13 +1,12 @@
 """Tests for YAML content parser."""
+
 import os
 
 import pytest
-
 from app.content_parser_yaml import YAMLContentParser
 from app.exceptions import ProcessingError
 
 CONTENT_DIR = os.path.join(os.path.dirname(__file__), "content")
-
 
 
 def test_init_with_valid_path():
@@ -59,7 +58,9 @@ def test_parse_all_rules_with_external_rules():
     parser = YAMLContentParser(os.path.join(CONTENT_DIR, "ok"))
     rules = parser.parse_all_rules()
 
-    rule1 = next(r for r in rules if r["rule_fqdn"] == "ccx_rules_ocp.external.rules.rule1")
+    rule1 = next(
+        r for r in rules if r["rule_fqdn"] == "ccx_rules_ocp.external.rules.rule1"
+    )
 
     assert rule1["error_key"] == "err_key"
     assert rule1["description"] == "Generic message for rule1"
@@ -88,7 +89,9 @@ def test_parse_all_rules_markdown_files():
     parser = YAMLContentParser(os.path.join(CONTENT_DIR, "ok"))
     rules = parser.parse_all_rules()
 
-    rule1 = next(r for r in rules if r["rule_fqdn"] == "ccx_rules_ocp.external.rules.rule1")
+    rule1 = next(
+        r for r in rules if r["rule_fqdn"] == "ccx_rules_ocp.external.rules.rule1"
+    )
 
     assert rule1["generic"] == "Generic message for rule1"
     assert "# Some more information" in rule1["more_info"]
@@ -131,9 +134,13 @@ def test_parse_all_rules_total_risk_calculation():
     rules = parser.parse_all_rules()
 
     # rule1: impact=2, likelihood=2 -> total_risk = (2+2)//2 = 2
-    rule1 = next(r for r in rules if r["rule_fqdn"] == "ccx_rules_ocp.external.rules.rule1")
+    rule1 = next(
+        r for r in rules if r["rule_fqdn"] == "ccx_rules_ocp.external.rules.rule1"
+    )
     assert rule1["total_risk"] == 2
 
     # rule2: impact=4, likelihood=3 -> total_risk = (4+3)//2 = 3
-    rule2 = next(r for r in rules if r["rule_fqdn"] == "ccx_rules_ocp.external.rules.rule2")
+    rule2 = next(
+        r for r in rules if r["rule_fqdn"] == "ccx_rules_ocp.external.rules.rule2"
+    )
     assert rule2["total_risk"] == 3

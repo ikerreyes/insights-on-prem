@@ -1,8 +1,7 @@
 """Tests for ResponseBuilder."""
+
 from datetime import datetime
 from unittest.mock import Mock
-
-import pytest
 
 from app.schemas import RuleHitDetailedResponse
 from app.utils.response_builder import ResponseBuilder
@@ -30,9 +29,7 @@ def test_build_rule_hit_v2_basic():
         "affected_objects": ["obj1", "obj2"],
     }
 
-    response = ResponseBuilder.build_rule_hit_v2(
-        hit, content_data, insights_details
-    )
+    response = ResponseBuilder.build_rule_hit_v2(hit, content_data, insights_details)
 
     assert isinstance(response, RuleHitDetailedResponse)
     assert response.rule_id == "ccx_rules_ocp.external.rules.test_rule"

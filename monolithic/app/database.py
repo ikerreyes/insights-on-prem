@@ -1,10 +1,11 @@
 """Database connection and session management."""
-from typing import Generator
+
+from collections.abc import Generator
 
 from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
 # Base class for declarative models
 Base = declarative_base()

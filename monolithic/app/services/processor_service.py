@@ -1,22 +1,22 @@
 """Insights-core archive processing service."""
+
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
-from typing import Dict, List, Tuple
-
-from sqlalchemy.orm import Session
 
 # Insights-core imports
 from insights import dr
 from insights.core.archives import extract
 from insights.core.hydration import initialize_broker
 from insights.formats.text import HumanReadableFormat
+from sqlalchemy.orm import Session
 
 from app.config import AppConfig
-from app.models import Report, RuleHit
 from app.exceptions import ProcessingError
+from app.models import Report, RequestReport, RuleHit
+from app.utils.content import normalize_rule_fqdn
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class ProcessorService:
             f"Processor initialized with {len(self.target_components)} components"
         )
 
-    def _get_component_graphs(self, target_components: List[str]) -> Dict:
+    def _get_component_graphs(self, target_components: list[str]) -> dict:
         """
         Get dependency graphs for target components.
 
@@ -90,7 +90,8 @@ class ProcessorService:
 
         if total_size >= self.unpacked_archive_size_limit:
             logger.warning(
-                f"Unpacked archive exceeds limit: {total_size} >= {self.unpacked_archive_size_limit}"
+                f"Unpacked archive exceeds limit: {total_size} >= "
+                f"{self.unpacked_archive_size_limit}"
             )
             return False
 
@@ -110,18 +111,20 @@ class ProcessorService:
         id_file_path = os.path.join(extraction_path, "config", "id")
         if os.path.exists(id_file_path):
             try:
-                with open(id_file_path, "r") as f:
+                with open(id_file_path) as f:
                     cluster_id = f.read().strip()
                     if cluster_id:
                         logger.info(f"Found cluster_id in config/id: {cluster_id}")
                         return cluster_id
             except Exception as e:
                 logger.error(f"Failed to read config/id: {e}")
-                raise ProcessingError(f"Failed to read config/id: {str(e)}")
+                raise ProcessingError(f"Failed to read config/id: {str(e)}") from e
 
-        raise ProcessingError("Could not find cluster ID. Missing config/id file in archive.")
+        raise ProcessingError(
+            "Could not find cluster ID. Missing config/id file in archive."
+        )
 
-    def process_with_insights_core(self, archive_path: str) -> Tuple[str, str]:
+    def process_with_insights_core(self, archive_path: str) -> tuple[str, str]:
         """
         Process archive with insights-core.
 
@@ -168,9 +171,9 @@ class ProcessorService:
 
         except Exception as e:
             logger.error(f"insights-core processing failed: {e}", exc_info=True)
-            raise ProcessingError(f"Analysis failed: {str(e)}")
+            raise ProcessingError(f"Analysis failed: {str(e)}") from e
 
-    def extract_rule_hits(self, results_json: str) -> List[Dict]:
+    def extract_rule_hits(self, results_json: str) -> list[dict]:
         """
         Extract rule hits from insights-core results.
 
@@ -195,11 +198,13 @@ class ProcessorService:
                     details = report.get("details", {})
 
                     if rule_fqdn:
-                        rule_hits.append({
-                            "rule_fqdn": rule_fqdn,
-                            "error_key": error_key,
-                            "details": details,
-                        })
+                        rule_hits.append(
+                            {
+                                "rule_fqdn": rule_fqdn,
+                                "error_key": error_key,
+                                "details": details,
+                            }
+                        )
 
             logger.info(f"Extracted {len(rule_hits)} rule hits")
 
@@ -210,13 +215,20 @@ class ProcessorService:
 
         return rule_hits
 
-    def save_results(self, db: Session, cluster_id: str, results_json: str) -> int:
+    def save_results(
+        self,
+        db: Session,
+        cluster_id: str,
+        results_json: str,
+        request_id: str,
+    ) -> int:
         """
         Save processing results to database.
 
         :param db: Database session
         :param cluster_id: Cluster identifier
         :param results_json: JSON results from insights-core
+        :param request_id: Request ID for on-demand gathering tracking
         :return: Number of rule hits saved
         """
         # Extract rule hits from results
@@ -227,7 +239,7 @@ class ProcessorService:
             report_data = {
                 "cluster_id": cluster_id,
                 "rule_count": len(rule_hits),
-                "processed_at": datetime.utcnow().isoformat(),
+                "processed_at": datetime.now(timezone.utc).isoformat(),
                 "results": results_json,
             }
 
@@ -235,11 +247,11 @@ class ProcessorService:
                 db,
                 cluster=cluster_id,
                 report=json.dumps(report_data),
-                gathered_at=datetime.utcnow(),
+                gathered_at=datetime.now(timezone.utc),
             )
 
-            # Upsert new rule hits (preserves impacted_since for existing ones)
-            new_keys = set()
+            # Replace all rule hits for this cluster atomically
+            RuleHit.delete_for_cluster(db, cluster_id)
             for hit in rule_hits:
                 RuleHit.upsert(
                     db,
@@ -247,13 +259,20 @@ class ProcessorService:
                     rule_fqdn=hit["rule_fqdn"],
                     error_key=hit["error_key"],
                 )
-                new_keys.add((hit["rule_fqdn"], hit["error_key"]))
 
-            # Remove rule hits that are no longer firing
-            existing_hits = db.query(RuleHit).filter_by(cluster_id=cluster_id).all()
-            for existing in existing_hits:
-                if (existing.rule_fqdn, existing.error_key) not in new_keys:
-                    db.delete(existing)
+            # Save simplified report for on-demand request tracking
+            simplified_report = json.dumps(
+                [
+                    {**hit, "rule_fqdn": normalize_rule_fqdn(hit["rule_fqdn"])}
+                    for hit in rule_hits
+                ]
+            )
+            RequestReport.create(
+                db,
+                request_id=request_id,
+                cluster_id=cluster_id,
+                report=simplified_report,
+            )
 
             # Commit the transaction
             db.commit()
@@ -264,15 +283,23 @@ class ProcessorService:
         except Exception as e:
             # Rollback on any error
             db.rollback()
-            logger.error(f"Failed to save results for cluster {cluster_id}: {e}", exc_info=True)
-            raise ProcessingError(f"Database save failed: {str(e)}")
+            logger.error(
+                f"Failed to save results for cluster {cluster_id}: {e}", exc_info=True
+            )
+            raise ProcessingError(f"Database save failed: {str(e)}") from e
 
-    def process_archive(self, db: Session, archive_path: str) -> Tuple[str, int]:
+    def process_archive(
+        self,
+        db: Session,
+        archive_path: str,
+        request_id: str,
+    ) -> tuple[str, int]:
         """
         Main processing function - extract, analyze, and save archive.
 
         :param db: Database session
         :param archive_path: Path to uploaded archive file
+        :param request_id: Request ID for on-demand gathering
         :return: Tuple of (cluster_id, number of rules found)
         :raises ProcessingError: If processing fails at any stage
         """
@@ -282,7 +309,7 @@ class ProcessorService:
         cluster_id, results_json = self.process_with_insights_core(archive_path)
 
         # Save to database
-        rules_count = self.save_results(db, cluster_id, results_json)
+        rules_count = self.save_results(db, cluster_id, results_json, request_id)
 
         logger.info(f"Completed processing for cluster {cluster_id}")
         return cluster_id, rules_count

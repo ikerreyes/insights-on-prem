@@ -11,10 +11,6 @@ Usage:
     python test_upload.py upload https://$INGRESS_URL
 """
 
-import json
-import tarfile
-from io import BytesIO
-
 import click
 import requests
 from molodec.archive_producer import ArchiveProducer
@@ -23,7 +19,10 @@ from molodec.renderer import Renderer
 from molodec.rules import RuleSet
 
 CLUSTER_ID = "181862b9-c53b-4ea9-ae22-ac4415e2cf21"
-IDENTITY_HEADER = "eyJpZGVudGl0eSI6IHsidHlwZSI6ICJVc2VyIiwgImFjY291bnRfbnVtYmVyIjogIjAwMDAwMDEiLCAib3JnX2lkIjogIjAwMDAwMSIsICJpbnRlcm5hbCI6IHsib3JnX2lkIjogIjAwMDAwMSJ9fX0="
+IDENTITY_HEADER = (
+    "eyJpZGVudGl0eSI6IHsidHlwZSI6ICJVc2VyIiwgImFjY291bnRfbnVtYmVyIjogIjAwMDAwMDEiLCAib3JnX2lkI"
+    "jogIjAwMDAwMSIsICJpbnRlcm5hbCI6IHsib3JnX2lkIjogIjAwMDAwMSJ9fX0="
+)
 
 
 def upload_ocp_recommendations(ingress_url):
@@ -37,7 +36,7 @@ def upload_ocp_recommendations(ingress_url):
         ingress_endpoint,
         files={"file": ("archive", tario.getvalue(), CONTENT_TYPE)},
         headers={"x-rh-identity": IDENTITY_HEADER},
-        verify=False
+        verify=False,
     )
 
     print(f"Status Code: {response.status_code}")
@@ -55,7 +54,7 @@ def cli():
 @cli.command("upload")
 @click.argument("ingress_url")
 def _upload(ingress_url):
-    upload_ocp_recommendations(ingress_url.rstrip('/'))
+    upload_ocp_recommendations(ingress_url.rstrip("/"))
 
 
 if __name__ == "__main__":

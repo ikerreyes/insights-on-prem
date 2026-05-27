@@ -1,7 +1,7 @@
 """Application configuration."""
+
 import os
 from dataclasses import dataclass, field
-from typing import List
 
 
 @dataclass
@@ -21,17 +21,22 @@ class AppConfig:
     temp_upload_dir: str = "/tmp/insights-uploads"
     extract_timeout_seconds: int = 300
     format: str = "insights.formats._json.JsonFormat"
-    target_components: List[str] = field(default_factory=list)
+    target_components: list[str] = field(default_factory=list)
     unpacked_archive_size_limit: int = -1
+
+    request_report_retention_hours: int = 24
+    request_report_cleanup_interval_minutes: int = 60
 
     thanos_url: str = "https://rbac-query-proxy.open-cluster-management-observability.svc.cluster.local:8443"
     thanos_token_path: str = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-    thanos_sa_cert_path: str = "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt"
+    thanos_sa_cert_path: str = (
+        "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt"
+    )
     thanos_query_timeout_seconds: int = 10
     thanos_query_lookback_minutes: int = 60
 
-    plugin_packages: List[str] = field(default_factory=list)
-    plugin_configs: List[dict] = field(default_factory=list)
+    plugin_packages: list[str] = field(default_factory=list)
+    plugin_configs: list[dict] = field(default_factory=list)
 
     @property
     def database_url(self) -> str:
@@ -56,6 +61,11 @@ _ENV_OVERRIDES = {
     "THANOS_SA_CERT_PATH": ("thanos_sa_cert_path", str),
     "THANOS_QUERY_TIMEOUT_SECONDS": ("thanos_query_timeout_seconds", int),
     "THANOS_QUERY_LOOKBACK_MINUTES": ("thanos_query_lookback_minutes", int),
+    "REQUEST_REPORT_RETENTION_HOURS": ("request_report_retention_hours", int),
+    "REQUEST_REPORT_CLEANUP_INTERVAL_MINUTES": (
+        "request_report_cleanup_interval_minutes",
+        int,
+    ),
 }
 
 

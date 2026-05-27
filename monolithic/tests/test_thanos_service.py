@@ -1,9 +1,9 @@
 """Tests for ThanosService."""
-from unittest.mock import patch, mock_open
+
+from unittest.mock import mock_open, patch
 
 import httpx
 import pytest
-
 from app.config import AppConfig
 from app.services.thanos_service import ThanosService
 
@@ -29,8 +29,14 @@ def test_build_query(thanos_service):
     assert 'ALERTS{clusterID=~"test-cluster-123"' in query
     assert 'namespace=~"openshift-.*"' in query
     assert 'severity=~"warning|critical"' in query
-    assert 'cluster_operator_conditions{clusterID=~"test-cluster-123", condition="Available"} == 0' in query
-    assert 'cluster_operator_conditions{clusterID=~"test-cluster-123", condition="Degraded"} == 1' in query
+    assert (
+        'cluster_operator_conditions{clusterID=~"test-cluster-123", condition="Available"} == 0'
+        in query
+    )
+    assert (
+        'cluster_operator_conditions{clusterID=~"test-cluster-123", condition="Degraded"} == 1'
+        in query
+    )
 
 
 def test_parse_response_console_url(thanos_service):
@@ -251,7 +257,9 @@ def test_query_cluster_metrics(mock_get, thanos_service):
 def test_query_cluster_metrics_http_error(mock_get, thanos_service):
     """Test that HTTP errors are propagated."""
     mock_request = httpx.Request("GET", "https://thanos.test:8443/api/v1/query")
-    mock_get.return_value = httpx.Response(500, text="Internal Server Error", request=mock_request)
+    mock_get.return_value = httpx.Response(
+        500, text="Internal Server Error", request=mock_request
+    )
 
     with pytest.raises(httpx.HTTPStatusError):
         thanos_service.query_cluster_metrics("cluster-123")

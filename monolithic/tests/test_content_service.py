@@ -1,4 +1,5 @@
 """Tests for ContentService."""
+
 from unittest.mock import Mock
 
 from app.services.content_service import ContentService

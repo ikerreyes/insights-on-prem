@@ -1,33 +1,48 @@
 """FastAPI application for Insights On Premise."""
+
 import asyncio
+import contextlib
+import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
-
 from contextlib import asynccontextmanager
-from fastapi import BackgroundTasks, FastAPI, File, Request, UploadFile, Depends, HTTPException, Header
-from fastapi.responses import JSONResponse
+from datetime import datetime, timedelta, timezone
+
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from app.config_loader import load_config, load_insights_components
-from app.database import init_db, get_db
+from app.content_parser_yaml import YAMLContentParser
+from app.database import get_db, init_db
+from app.exceptions import ValidationError
+from app.models import RequestReport
 from app.schemas import (
-    UploadResponse,
-    ErrorResponse,
-    ReportResponseV2,
     BatchUpgradeRisksPredictionRequest,
     BatchUpgradeRisksPredictionResponse,
     ClusterPrediction,
+    ErrorResponse,
+    ReportResponseV2,
+    RequestReportResponse,
+    RequestStatusResponse,
+    SimplifiedRuleHit,
+    UploadResponse,
 )
-from app.content_parser_yaml import YAMLContentParser
-from app.services.report_service import ReportService
-from app.services.upload_service import UploadService
-from app.services.processor_service import ProcessorService
 from app.services.content_service import ContentService
+from app.services.processor_service import ProcessorService
+from app.services.report_service import ReportService
 from app.services.thanos_service import ThanosService
 from app.services.upgrade_prediction_service import UpgradePredictionService
-from app.exceptions import ValidationError
+from app.services.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +65,51 @@ async def lifespan(app: FastAPI):
     load_insights_components(config)
 
     app.state.processor_service = ProcessorService(config)
-    app.state.upload_service = UploadService(app.state.processor_service, config, session_factory)
+    app.state.upload_service = UploadService(
+        app.state.processor_service, config, session_factory
+    )
     app.state.content_service = ContentService(YAMLContentParser())
     app.state.report_service = ReportService(app.state.content_service)
     app.state.thanos_service = ThanosService(config)
     app.state.upgrade_prediction_service = UpgradePredictionService()
     logger.info("All services initialized successfully")
 
+    # Start periodic cleanup of old request reports
+    cleanup_task = asyncio.create_task(
+        _cleanup_old_request_reports(session_factory, config)
+    )
+
     yield
+
+    # Cancel cleanup task on shutdown
+    cleanup_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await cleanup_task
+
+
+async def _cleanup_old_request_reports(session_factory, config):
+    """Periodically delete old request report records."""
+    while True:
+        db = session_factory()
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(
+                hours=config.request_report_retention_hours
+            )
+            deleted = RequestReport.delete_older_than(db, cutoff)
+            db.commit()
+            if deleted:
+                logger.info(f"Cleaned up {deleted} old request reports")
+        except Exception as e:
+            logger.error(f"Request report cleanup failed: {e}")
+            try:
+                db.rollback()
+            except Exception as rollback_err:
+                logger.error(f"Rollback also failed: {rollback_err}")
+        finally:
+            db.close()
+
+        # Wait for configured time until next cleanup
+        await asyncio.sleep(config.request_report_cleanup_interval_minutes * 60)
 
 
 # Create FastAPI app
@@ -65,7 +117,7 @@ app = FastAPI(
     title="Insights On-Premise",
     description="Red Hat Insights archive processing for on-premise deployment",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -97,39 +149,41 @@ async def health_check():
 )
 async def upload_archive(
     request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    x_rh_insights_request_id: str = Header(None, alias="x-rh-insights-request-id"),
+    file: UploadFile = File(...),  # noqa: B008
 ):
     """
     Upload and process Red Hat Insights archive.
 
     :param file: Uploaded archive file (tar, tar.gz, or tgz format)
     :param background_tasks: FastAPI background tasks
-    :param x_rh_insights_request_id: Optional request ID header
     :return: UploadResponse with accepted status
     :raises HTTPException: On validation errors
     """
     upload_service: UploadService = request.app.state.upload_service
 
-    # Generate or use provided request ID
-    request_id = x_rh_insights_request_id or str(uuid.uuid4())
+    request_id = str(uuid.uuid4())
 
     try:
-        return await upload_service.process_upload(background_tasks, file, request_id)
+        upload_response = await upload_service.process_upload(
+            background_tasks, file, request_id
+        )
+        response.headers["x-rh-insights-request-id"] = request_id
+        return upload_response
 
     except ValidationError as e:
         raise HTTPException(
             status_code=400,
             detail=str(e),
-        )
+        ) from e
 
     except Exception as e:
         logger.error(f"Request {request_id}: Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Internal server error during upload processing",
-        )
+        ) from e
 
 
 @app.get(
@@ -146,7 +200,7 @@ async def upload_archive(
 async def get_cluster_report_v2(
     request: Request,
     cluster_id: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
 ):
     """
     Retrieve the latest report for a specific cluster (v2 endpoint).
@@ -173,7 +227,7 @@ async def get_cluster_report_v2(
         raise HTTPException(
             status_code=404,
             detail=str(e),
-        )
+        ) from e
 
     except Exception as e:
         logger.error(
@@ -182,7 +236,7 @@ async def get_cluster_report_v2(
         raise HTTPException(
             status_code=500,
             detail="Internal server error while fetching cluster report",
-        )
+        ) from e
 
 
 @app.post(
@@ -206,13 +260,18 @@ async def upgrade_risks_prediction_batch(
     :return: BatchUpgradeRisksPredictionResponse
     """
     thanos_service: ThanosService = request.app.state.thanos_service
-    prediction_service: UpgradePredictionService = request.app.state.upgrade_prediction_service
+    prediction_service: UpgradePredictionService = (
+        request.app.state.upgrade_prediction_service
+    )
 
-    MAX_BATCH_SIZE = 100
-    if len(body.clusters) > MAX_BATCH_SIZE:
+    max_batch_size = 100
+    if len(body.clusters) > max_batch_size:
         raise HTTPException(
             status_code=400,
-            detail=f"Batch size {len(body.clusters)} exceeds maximum of {MAX_BATCH_SIZE} clusters per request.",
+            detail=(
+                f"Batch size {len(body.clusters)} exceeds maximum of "
+                f"{max_batch_size} clusters per request."
+            ),
         )
     clusters = body.clusters
 
@@ -227,10 +286,14 @@ async def upgrade_risks_prediction_batch(
                 prediction_status="ok",
                 upgrade_recommended=result.upgrade_recommended,
                 upgrade_risks_predictors=result.upgrade_risks_predictors,
-                last_checked_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                last_checked_at=datetime.now(timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
             )
         except Exception:
-            logger.exception("Error predicting upgrade risks for cluster %s", cluster_id)
+            logger.exception(
+                "Error predicting upgrade risks for cluster %s", cluster_id
+            )
             return ClusterPrediction(
                 cluster_id=cluster_id,
                 prediction_status="No data for the cluster",
@@ -238,6 +301,100 @@ async def upgrade_risks_prediction_batch(
 
     predictions = await asyncio.gather(*[predict_for_cluster(c) for c in clusters])
     return BatchUpgradeRisksPredictionResponse(predictions=list(predictions))
+
+
+@app.get(
+    "/api/v2/cluster/{cluster_id}/request/{request_id}/status",
+    response_model=RequestStatusResponse,
+    status_code=200,
+    responses={
+        404: {"model": ErrorResponse, "description": "Request ID not found"},
+    },
+)
+async def get_request_status(
+    cluster_id: str,
+    request_id: str,
+    db: Session = Depends(get_db),  # noqa: B008
+):
+    """
+    Check the processing status of an on-demand data gathering request.
+
+    Returns 404 if the request has not been processed yet (operator retries).
+    """
+    record = RequestReport.get_by_cluster_and_request(db, cluster_id, request_id)
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail="Request ID not found for given cluster_id",
+        )
+
+    return RequestStatusResponse(
+        cluster=cluster_id,
+        requestID=request_id,
+        status="processed",
+    )
+
+
+@app.get(
+    "/api/v2/cluster/{cluster_id}/request/{request_id}/report",
+    response_model=RequestReportResponse,
+    status_code=200,
+    responses={
+        404: {"model": ErrorResponse, "description": "Request ID not found"},
+    },
+)
+async def get_request_report(
+    request: Request,
+    cluster_id: str,
+    request_id: str,
+    db: Session = Depends(get_db),  # noqa: B008
+):
+    """
+    Retrieve the simplified report for an on-demand data gathering request.
+    The raw report from DB does not include rules content, so the endpoint
+    also repopulates with that (description and total risk).
+
+    Returns 404 if the request has not been processed yet.
+    """
+    record = RequestReport.get_by_cluster_and_request(db, cluster_id, request_id)
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail="Request ID not found for given cluster_id",
+        )
+
+    content_service = request.app.state.content_service
+
+    try:
+        rule_hits_raw = json.loads(record.report)
+    except (json.JSONDecodeError, TypeError):
+        rule_hits_raw = []
+
+    rule_hits = []
+    for hit in rule_hits_raw:
+        rule_fqdn = hit.get("rule_fqdn", "")
+        error_key = hit.get("error_key", "")
+        content = content_service.get_content(rule_fqdn, error_key)
+        if not content:
+            logger.warning(
+                f"Content not found for rule {rule_fqdn} error_key {error_key}, skipping"
+            )
+            continue
+        rule_hits.append(
+            SimplifiedRuleHit(
+                rule_fqdn=rule_fqdn,
+                error_key=error_key,
+                description=content.get("description", ""),
+                total_risk=content.get("total_risk", 0),
+            )
+        )
+
+    return RequestReportResponse(
+        cluster=cluster_id,
+        requestID=request_id,
+        status="processed",
+        report=rule_hits,
+    )
 
 
 @app.exception_handler(HTTPException)

@@ -1,17 +1,18 @@
 """Service for upload orchestration and validation."""
+
+import contextlib
 import logging
 import os
 import tempfile
-from datetime import datetime
-from typing import Tuple
+from datetime import datetime, timezone
 
 from fastapi import BackgroundTasks, UploadFile
 from sqlalchemy.orm import sessionmaker
 
 from app.config import AppConfig
+from app.exceptions import ValidationError
 from app.schemas import UploadResponse
 from app.services.processor_service import ProcessorService
-from app.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +39,12 @@ class UploadService:
 
     def _get_archive_suffix(self, file: UploadFile) -> str:
         suffix = ""
-        if file.filename.endswith('.tar.gz'):
-            suffix = '.tar.gz'
-        elif file.filename.endswith('.tgz'):
-            suffix = '.tgz'
-        elif file.filename.endswith('.tar'):
-            suffix = '.tar'
+        if file.filename.endswith(".tar.gz"):
+            suffix = ".tar.gz"
+        elif file.filename.endswith(".tgz"):
+            suffix = ".tgz"
+        elif file.filename.endswith(".tar"):
+            suffix = ".tar"
         return suffix
 
     def _validate_file(self, file: UploadFile, request_id: str) -> None:
@@ -59,12 +60,12 @@ class UploadService:
             raise ValidationError("No filename provided")
 
         if self._get_archive_suffix(file) == "":
-            logger.warning(f"Request {request_id}: Invalid file format: {file.filename}")
+            logger.warning(
+                f"Request {request_id}: Invalid file format: {file.filename}"
+            )
             raise ValidationError("File must be a .tar, .tar.gz, or .tgz archive")
 
-    async def _save_to_temp(
-        self, file: UploadFile, request_id: str
-    ) -> Tuple[str, int]:
+    async def _save_to_temp(self, file: UploadFile, request_id: str) -> tuple[str, int]:
         """
         Save uploaded file to temporary location.
 
@@ -94,16 +95,15 @@ class UploadService:
 
                 if total_size > self.config.max_file_size:
                     # Clean up temp file before raising
-                    try:
+                    with contextlib.suppress(Exception):
                         os.remove(temp_file_path)
-                    except:
-                        pass
 
                     logger.warning(
                         f"Request {request_id}: File too large ({total_size} bytes)"
                     )
                     raise ValidationError(
-                        f"File size exceeds maximum allowed size of {self.config.max_file_size} bytes"
+                        f"File size exceeds maximum allowed size of "
+                        f"{self.config.max_file_size} bytes"
                     )
 
                 temp_file.write(chunk)
@@ -125,14 +125,17 @@ class UploadService:
             db = self.session_factory()
             try:
                 cluster_id, rules_count = self.processor_service.process_archive(
-                    db, temp_file_path
+                    db, temp_file_path, request_id
                 )
                 logger.info(
                     f"Request {request_id}: Successfully processed cluster {cluster_id} "
                     f"with {rules_count} rules"
                 )
             except Exception as e:
-                logger.error(f"Request {request_id}: Background processing failed: {e}", exc_info=True)
+                logger.error(
+                    f"Request {request_id}: Background processing failed: {e}",
+                    exc_info=True,
+                )
             finally:
                 db.close()
         finally:
@@ -164,10 +167,12 @@ class UploadService:
         temp_file_path, total_size = await self._save_to_temp(file, request_id)
 
         # Schedule processing as background task
-        background_tasks.add_task(self._process_in_background, temp_file_path, request_id)
+        background_tasks.add_task(
+            self._process_in_background, temp_file_path, request_id
+        )
 
         return UploadResponse(
             request_id=request_id,
             status="accepted",
-            uploaded_at=datetime.utcnow(),
+            uploaded_at=datetime.now(timezone.utc),
         )

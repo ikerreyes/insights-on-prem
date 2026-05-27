@@ -1,12 +1,21 @@
 """Utilities for building API responses."""
+
 from datetime import datetime as dt
-from typing import Dict, Optional
 
 from app.schemas import RuleHitDetailedResponse
 from app.utils.content import format_datetime_rfc3339
 
 # Keys from content_data that map directly to RuleHitDetailedResponse fields
-_CONTENT_FIELDS = {"description", "generic", "reason", "resolution", "more_info", "total_risk", "tags"}
+_CONTENT_FIELDS = {
+    "description",
+    "generic",
+    "reason",
+    "resolution",
+    "more_info",
+    "total_risk",
+    "tags",
+}
+
 
 class ResponseBuilder:
     """Helper class for building API responses."""
@@ -14,9 +23,9 @@ class ResponseBuilder:
     @staticmethod
     def build_rule_hit_v2(
         hit,
-        content_data: Dict,
-        insights_details: Dict,
-        publish_date: Optional[str] = None,
+        content_data: dict,
+        insights_details: dict,
+        publish_date: str | None = None,
     ) -> RuleHitDetailedResponse:
         """
         Build v2 rule hit detailed response.
@@ -31,7 +40,7 @@ class ResponseBuilder:
         try:
             pub_dt = dt.fromisoformat(publish_date.replace("Z", "+00:00"))
             created_at = pub_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-        except:
+        except Exception:  # noqa: S110
             created_at = None
 
         # Build extra_data by merging insights details

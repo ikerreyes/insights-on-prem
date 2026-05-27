@@ -11,7 +11,7 @@ jobs:
     uses: RedHatInsights/processing-tools/.github/workflows/pytests.yaml@master
     secrets: inherit
     with:
-      python_version: '3.12'
+      python_version: '3.14'
       requirements_file: monolithic/requirements-test.txt
       packages: monolithic
       coverage: true

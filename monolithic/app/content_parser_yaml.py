@@ -4,10 +4,11 @@ Parse rule content from markdown/YAML files.
 This module reads rule metadata from the content/ directory structure
 that matches the format used by insights-content-service.
 """
+
 import logging
-import yaml
 from pathlib import Path
-from typing import Dict, List
+
+import yaml
 
 from app.exceptions import ProcessingError
 
@@ -31,7 +32,9 @@ class YAMLContentParser:
 
         if not self.content_path.exists():
             logger.error(f"Content path {self.content_path} does not exist")
-            raise ProcessingError(f"Rules content directory not found: {self.content_path}")
+            raise ProcessingError(
+                f"Rules content directory not found: {self.content_path}"
+            )
 
         # Load impact mapping from config.yaml
         self.impact_mapping = self._load_impact_mapping()
@@ -48,7 +51,7 @@ class YAMLContentParser:
             return {}
 
         try:
-            with open(config_file, "r", encoding="utf-8") as f:
+            with open(config_file, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
                 impact_map = config.get("impact", {})
                 logger.debug(f"Loaded {len(impact_map)} impact mappings from config")
@@ -57,7 +60,7 @@ class YAMLContentParser:
             logger.warning(f"Failed to load impact mapping: {e}")
             return {}
 
-    def parse_all_rules(self) -> List[Dict]:
+    def parse_all_rules(self) -> list[dict]:
         """
         Parse all rule files and extract metadata.
 
@@ -71,7 +74,9 @@ class YAMLContentParser:
             for subdir in external_path.iterdir():
                 if subdir.is_dir() and not subdir.name.startswith("."):
                     # e.g., external/rules, external/ocs, external/dvo
-                    rules_content.extend(self._parse_rules_directory(subdir, f"external.{subdir.name}"))
+                    rules_content.extend(
+                        self._parse_rules_directory(subdir, f"external.{subdir.name}")
+                    )
 
         # Parse internal rules - scan all subdirectories
         internal_path = self.content_path / "internal"
@@ -79,12 +84,16 @@ class YAMLContentParser:
             for subdir in internal_path.iterdir():
                 if subdir.is_dir() and not subdir.name.startswith("."):
                     # e.g., internal/rules
-                    rules_content.extend(self._parse_rules_directory(subdir, f"internal.{subdir.name}"))
+                    rules_content.extend(
+                        self._parse_rules_directory(subdir, f"internal.{subdir.name}")
+                    )
 
-        logger.info(f"Parsed {len(rules_content)} rule content entries from {self.content_path}")
+        logger.info(
+            f"Parsed {len(rules_content)} rule content entries from {self.content_path}"
+        )
         return rules_content
 
-    def _parse_rules_directory(self, rules_dir: Path, rule_type: str) -> List[Dict]:
+    def _parse_rules_directory(self, rules_dir: Path, rule_type: str) -> list[dict]:
         """
         Parse all rules in a directory (external or internal).
 
@@ -108,7 +117,7 @@ class YAMLContentParser:
 
         return rules_content
 
-    def _parse_rule_directory(self, rule_dir: Path, rule_type: str) -> List[Dict]:
+    def _parse_rule_directory(self, rule_dir: Path, rule_type: str) -> list[dict]:
         """
         Parse a single rule directory.
 
@@ -126,17 +135,13 @@ class YAMLContentParser:
             logger.warning(f"No plugin.yaml found for {rule_name}")
             return []
 
-        with open(plugin_file, "r", encoding="utf-8") as f:
-            plugin_data = yaml.safe_load(f)
-
-        # Get plugin metadata
-        plugin_info = plugin_data.get("plugin", {})
-
         # Read plugin-level markdown files (used as fallback for error keys)
         plugin_content = self._read_markdown_files(rule_dir)
 
         # Find all error key directories
-        error_key_dirs = [d for d in rule_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+        error_key_dirs = [
+            d for d in rule_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
+        ]
 
         rules = []
         for error_key_dir in error_key_dirs:
@@ -154,11 +159,11 @@ class YAMLContentParser:
                     impact = int(impact_value)
                 else:
                     # String value - look up in config.yaml mapping
-                    # Use the exact string first, then try lowercase, default to 1 (per config.yaml: "null: 1")
+                    # Use exact string first, then try lowercase, default to 1
+                    # (per config.yaml: "null: 1")
                     impact_str = str(impact_value)
                     impact = self.impact_mapping.get(
-                        impact_str,
-                        self.impact_mapping.get(impact_str.lower(), 1)
+                        impact_str, self.impact_mapping.get(impact_str.lower(), 1)
                     )
 
                 # Get likelihood
@@ -187,11 +192,13 @@ class YAMLContentParser:
                 rules.append(rule_content)
 
             except Exception as e:
-                logger.warning(f"Failed to parse error key {error_key} for {rule_name}: {e}")
+                logger.warning(
+                    f"Failed to parse error key {error_key} for {rule_name}: {e}"
+                )
 
         return rules
 
-    def _read_markdown_files(self, directory: Path) -> Dict:
+    def _read_markdown_files(self, directory: Path) -> dict:
         """
         Read markdown content files from a directory.
 
@@ -202,13 +209,15 @@ class YAMLContentParser:
         for md_type in ["generic", "reason", "resolution", "more_info"]:
             md_file = directory / f"{md_type}.md"
             if md_file.exists():
-                with open(md_file, "r", encoding="utf-8") as f:
+                with open(md_file, encoding="utf-8") as f:
                     text = f.read().strip()
                     if text:
                         content[md_type] = text
         return content
 
-    def _parse_error_key_directory(self, error_key_dir: Path, plugin_content: Dict) -> Dict:
+    def _parse_error_key_directory(
+        self, error_key_dir: Path, plugin_content: dict
+    ) -> dict:
         """
         Parse an error key directory containing metadata and markdown files.
 
@@ -225,7 +234,7 @@ class YAMLContentParser:
         # Read metadata.yaml if it exists
         metadata_file = error_key_dir / "metadata.yaml"
         if metadata_file.exists():
-            with open(metadata_file, "r", encoding="utf-8") as f:
+            with open(metadata_file, encoding="utf-8") as f:
                 metadata = yaml.safe_load(f)
                 if metadata:
                     content.update(metadata)

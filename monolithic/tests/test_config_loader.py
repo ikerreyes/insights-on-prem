@@ -1,8 +1,9 @@
 """Tests for config loader."""
-import pytest
-import yaml
+
 from unittest.mock import patch
 
+import pytest
+import yaml
 from app.config import AppConfig
 from app.config_loader import load_config, load_insights_components
 from app.exceptions import ProcessingError
@@ -88,10 +89,12 @@ def test_load_config_empty_file(tmp_path):
     assert config.extract_timeout_seconds == 300
 
 
-@patch('app.config_loader.apply_configs')
-@patch('app.config_loader.apply_default_enabled')
-@patch('app.config_loader.dr')
-def test_load_insights_components_success(mock_dr, mock_apply_default, mock_apply_configs):
+@patch("app.config_loader.apply_configs")
+@patch("app.config_loader.apply_default_enabled")
+@patch("app.config_loader.dr")
+def test_load_insights_components_success(
+    mock_dr, mock_apply_default, mock_apply_configs
+):
     """Test loading components successfully."""
     config = AppConfig(
         plugin_packages=["package1", "package2"],
@@ -109,10 +112,12 @@ def test_load_insights_components_success(mock_dr, mock_apply_default, mock_appl
     mock_apply_configs.assert_called_once_with(expected_plugins)
 
 
-@patch('app.config_loader.apply_configs')
-@patch('app.config_loader.apply_default_enabled')
-@patch('app.config_loader.dr')
-def test_load_insights_components_package_load_fails(mock_dr, mock_apply_default, mock_apply_configs):
+@patch("app.config_loader.apply_configs")
+@patch("app.config_loader.apply_default_enabled")
+@patch("app.config_loader.dr")
+def test_load_insights_components_package_load_fails(
+    mock_dr, mock_apply_default, mock_apply_configs
+):
     """Test component loading when package fails to load."""
     config = AppConfig(plugin_packages=["failing_package"])
 
@@ -122,10 +127,12 @@ def test_load_insights_components_package_load_fails(mock_dr, mock_apply_default
         load_insights_components(config)
 
 
-@patch('app.config_loader.apply_configs')
-@patch('app.config_loader.apply_default_enabled')
-@patch('app.config_loader.dr')
-def test_load_insights_components_empty_packages(mock_dr, mock_apply_default, mock_apply_configs):
+@patch("app.config_loader.apply_configs")
+@patch("app.config_loader.apply_default_enabled")
+@patch("app.config_loader.dr")
+def test_load_insights_components_empty_packages(
+    mock_dr, mock_apply_default, mock_apply_configs
+):
     """Test loading components with no packages."""
     config = AppConfig(plugin_packages=[])
 
@@ -134,10 +141,12 @@ def test_load_insights_components_empty_packages(mock_dr, mock_apply_default, mo
     mock_dr.load_components.assert_not_called()
 
 
-@patch('app.config_loader.apply_configs')
-@patch('app.config_loader.apply_default_enabled')
-@patch('app.config_loader.dr')
-def test_load_insights_components_no_plugins(mock_dr, mock_apply_default, mock_apply_configs):
+@patch("app.config_loader.apply_configs")
+@patch("app.config_loader.apply_default_enabled")
+@patch("app.config_loader.dr")
+def test_load_insights_components_no_plugins(
+    mock_dr, mock_apply_default, mock_apply_configs
+):
     """Test loading components when no plugins configured."""
     config = AppConfig()
 
@@ -146,27 +155,39 @@ def test_load_insights_components_no_plugins(mock_dr, mock_apply_default, mock_a
     mock_dr.load_components.assert_not_called()
 
 
-@patch('app.config_loader.apply_configs')
-@patch('app.config_loader.apply_default_enabled')
-@patch('app.config_loader.dr')
-def test_load_insights_components_multiple_packages(mock_dr, mock_apply_default, mock_apply_configs):
+@patch("app.config_loader.apply_configs")
+@patch("app.config_loader.apply_default_enabled")
+@patch("app.config_loader.dr")
+def test_load_insights_components_multiple_packages(
+    mock_dr, mock_apply_default, mock_apply_configs
+):
     """Test loading multiple packages."""
     config = AppConfig(
-        plugin_packages=["ccx_rules_ocp.external", "ccx_rules_processing", "custom_package"],
+        plugin_packages=[
+            "ccx_rules_ocp.external",
+            "ccx_rules_processing",
+            "custom_package",
+        ],
     )
 
     load_insights_components(config)
 
     assert mock_dr.load_components.call_count == 3
-    mock_dr.load_components.assert_any_call("ccx_rules_ocp.external", continue_on_error=False)
-    mock_dr.load_components.assert_any_call("ccx_rules_processing", continue_on_error=False)
+    mock_dr.load_components.assert_any_call(
+        "ccx_rules_ocp.external", continue_on_error=False
+    )
+    mock_dr.load_components.assert_any_call(
+        "ccx_rules_processing", continue_on_error=False
+    )
     mock_dr.load_components.assert_any_call("custom_package", continue_on_error=False)
 
 
-@patch('app.config_loader.apply_configs')
-@patch('app.config_loader.apply_default_enabled')
-@patch('app.config_loader.dr')
-def test_load_insights_components_partial_failure(mock_dr, mock_apply_default, mock_apply_configs):
+@patch("app.config_loader.apply_configs")
+@patch("app.config_loader.apply_default_enabled")
+@patch("app.config_loader.dr")
+def test_load_insights_components_partial_failure(
+    mock_dr, mock_apply_default, mock_apply_configs
+):
     """Test that any package failure stops the process."""
     config = AppConfig(
         plugin_packages=["good_package", "bad_package", "another_good_package"],
@@ -174,7 +195,9 @@ def test_load_insights_components_partial_failure(mock_dr, mock_apply_default, m
 
     mock_dr.load_components.side_effect = [None, Exception("Load failed"), None]
 
-    with pytest.raises(ProcessingError, match="Failed to load required package 'bad_package'"):
+    with pytest.raises(
+        ProcessingError, match="Failed to load required package 'bad_package'"
+    ):
         load_insights_components(config)
 
     assert mock_dr.load_components.call_count == 2
