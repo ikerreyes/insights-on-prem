@@ -1,6 +1,6 @@
-# Insights on Prem
+# Insights on Premise
 
-Self-contained on-premise deployment of Insights for OpenShift clusters.
+Insights on Premise, consolidated into a single deployable service.
 
 - **Monolithic app** (`monolithic/`) — single Python (FastAPI) service that replaces the full console.redhat.com pipeline with a minimal, deployable alternative
 - **Deploys via ACM addon** — managed through the `monolithic-acm-addon-complete` branch for addon-based rollout to spoke clusters
