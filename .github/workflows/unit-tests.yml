@@ -24,6 +24,14 @@ jobs:
           pip install --upgrade pip
           pip install -r monolithic/requirements-test.txt
 
-      - name: Run unit tests
+      - name: Run unit tests with coverage
         working-directory: monolithic
-        run: pytest tests/ -v --tb=short
+        run: pytest tests/ -v --tb=short --cov=. --cov-report=xml:coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: unit-tests
+          files: monolithic/coverage.xml
+          fail_ci_if_error: false
