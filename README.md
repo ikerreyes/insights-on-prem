@@ -1,10 +1,12 @@
-# Insights on Prem PoC
+# Insights on Premise
 
-This repository contains all files necessary for running Insights on Prem. In the PoC phase, we are considering two different variants:
+Insights on Premise, consolidated into a single deployable service.
 
-1. Deployment of all required components of the original pipeline
-   as it is currently runnning on console.redhat.com. Deployment files
-   and guide to run the pipeline is located under `microservices` directory.
-2. Development of separate new application that would provide
-   minimal features of the original pipeline and deployment
-   of this app instead. This approach can be found under `monolithic` directory.
+- **Monolithic app** (`monolithic/`) — single Python (FastAPI) service that replaces the full console.redhat.com pipeline with a minimal, deployable alternative
+- **Deploys via ACM addon** — managed through the `monolithic-acm-addon-complete` branch for addon-based rollout to spoke clusters
+- **Test infra** (`tests/`) — containerized test runtime image built by Tekton, used for integration and e2e testing
+- **CI** — Tekton pipelines (`.tekton/`) for image builds, GitHub Actions for linting and unit tests
+
+---
+
+The original microservices-based approach (deploying the full console.redhat.com pipeline components individually) was explored early on but we decided to pursue the monolithic architecture instead. The microservices deployment files are preserved on the [`microservices`](https://github.com/RedHatInsights/insights-on-prem/tree/microservices) branch for reference.
