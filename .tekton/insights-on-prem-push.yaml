@@ -8,7 +8,7 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "konflux-staging-test"
+      == "konflux-pr-test"
   labels:
     appstudio.openshift.io/application: insights-on-prem
     appstudio.openshift.io/component: insights-on-prem
