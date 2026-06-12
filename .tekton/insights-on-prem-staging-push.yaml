@@ -16,7 +16,7 @@ metadata:
     appstudio.openshift.io/application: insights-on-prem
     appstudio.openshift.io/component: insights-on-prem
     pipelines.appstudio.openshift.io/type: build
-  name: insights-on-prem-staging-on-pull-request
+  name: insights-on-prem-staging-on-push
   namespace: ireyes-tenant
 spec:
   params:
